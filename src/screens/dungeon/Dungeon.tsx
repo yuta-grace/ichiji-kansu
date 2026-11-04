@@ -7,6 +7,7 @@ import settings from '../../content/settings.json';
 import { pointsText } from '../../lib/dungeon';
 import type { DungeonProblem, MethodId } from '../../lib/dungeon';
 import { isLearned, learnMethod, methodLabel, noteOrder } from '../../lib/notebook';
+import { addResult } from '../../lib/results';
 import { addLater, addLog, load, update } from '../../lib/storage';
 import type { SaveData } from '../../lib/storage';
 import { fill } from '../../lib/text';
@@ -23,12 +24,6 @@ const N = L.note;
 const PROBLEMS = content.problems as DungeonProblem[];
 
 type DungeonSave = NonNullable<SaveData['dungeon']>;
-
-/** 時間の表示：「42秒」「1分05秒」 */
-export function formatTime(ms: number) {
-  const s = Math.round(ms / 1000);
-  return s < 60 ? `${s}秒` : `${Math.floor(s / 60)}分${String(s % 60).padStart(2, '0')}秒`;
-}
 
 type Phase =
   | { kind: 'intro3' }
@@ -72,7 +67,10 @@ export default function Dungeon({ onExit }: { onExit: () => void }) {
     persist(s);
     // 自分で正解した後は「他のやり方も見てみる？」（ヒントで使った解き方は除く）
     const others = noteOrder(load()).filter((m) => m !== o.hintMethod);
-    setPhase(o.correct && others.length ? { kind: 'others', used: o.hintMethod, problem } : nextPhase(s));
+    const next: Phase = o.correct && others.length ? { kind: 'others', used: o.hintMethod, problem } : nextPhase(s);
+    // 新しく手に入れた称号があれば、先に見せる
+    const gained = addResult({ entry: 'dungeon', problemId: problem.id, level: problem.level, types: problem.types, correct: o.correct, ms: o.ms, hint: o.hintsUsed > 0 });
+    setPhase(gained.length ? { kind: 'talk', lines: gained, then: next } : next);
   };
   const toNext = () => setPhase(nextPhase(save));
 

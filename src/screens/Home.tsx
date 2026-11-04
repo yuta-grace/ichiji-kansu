@@ -4,11 +4,13 @@ import diagnostic from '../content/diagnostic.json';
 import home from '../content/home.json';
 import practice from '../content/practice.json';
 import profileText from '../content/profile.json';
+import settings from '../content/settings.json';
+import { mixEntries } from './Mix';
 import { addLog, currentProfile, load, openLater, sessionStartedAt, update } from '../lib/storage';
 import type { LaterItem, SaveData } from '../lib/storage';
 import { fill } from '../lib/text';
 
-export type PartId = 'diagnostic' | 'understanding' | 'practice' | 'dungeon';
+export type PartId = 'diagnostic' | 'understanding' | 'practice' | 'dungeon' | 'mix';
 
 const LT = profileText.later;
 const P = home.progress;
@@ -25,7 +27,7 @@ interface Entry {
 }
 const ENTRIES: Entry[] = home.groups.flatMap((g) => g.items as Entry[]);
 const entryOf = (id: string) => ENTRIES.find((e) => e.id === id);
-const isPart = (id: string): id is PartId => ['diagnostic', 'understanding', 'practice', 'dungeon'].includes(id);
+const isPart = (id: string): id is PartId => ['diagnostic', 'understanding', 'practice', 'dungeon', 'mix'].includes(id);
 
 /** 入口ごとの進み具合：一覧に出す文字と、「続きから」カードのボタン */
 function status(id: PartId, d: SaveData): { note: string; done: boolean; button: string } {
@@ -52,6 +54,8 @@ function status(id: PartId, d: SaveData): { note: string; done: boolean; button:
         ? { note: fill(P.solved, { n: pos }), done: false, button: fill(home.card.fromN, { n: pos + 1 }) }
         : { note: '', done: false, button: home.card.start };
     }
+    case 'mix':
+      return { note: fill(P.notStarted, { n: settings.mix.count }), done: false, button: home.card.start };
   }
 }
 
@@ -155,8 +159,10 @@ export default function Home({
           <h2 className="menu-title">{g.title}</h2>
           <ul className="menu">
             {(g.items as Entry[]).map((m) => {
-              const ready = m.ready !== false && isPart(m.id);
-              const note = !ready ? P.notReady : suggested.includes(m.id) && !data.lastPart ? home.suggestedMark : status(m.id as PartId, data).note;
+              // ミックスは、1問以上解いた入口があるときだけ選べる
+              const mixLocked = m.id === 'mix' && mixEntries().length === 0;
+              const ready = m.ready !== false && isPart(m.id) && !mixLocked;
+              const note = mixLocked ? P.mixNotYet : !ready ? P.notReady : suggested.includes(m.id) && !data.lastPart ? home.suggestedMark : status(m.id as PartId, data).note;
               return (
                 <li key={m.id}>
                   <button

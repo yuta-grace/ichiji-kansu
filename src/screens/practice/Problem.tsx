@@ -20,7 +20,9 @@ import { buildHints } from '../../lib/hints';
 import type { HintSpec, HintTexts } from '../../lib/hints';
 import { asLine, eqText, lineThrough, linear, onLine, yAt } from '../../lib/linear';
 import { practiceHints, practiceSolution } from '../../lib/practiceSolution';
+import { formatTime } from '../../lib/results';
 import { fill } from '../../lib/text';
+import titleText from '../../content/titles.json';
 
 export const L = content.lines;
 const S = settings.practice;
@@ -35,6 +37,8 @@ export interface ProblemData {
   b: string;
   xs?: number[];
   hints?: HintSpec[];
+  level: string;
+  types: string[];
 }
 
 export interface ProblemResult {
@@ -43,6 +47,8 @@ export interface ProblemResult {
   firstTry: boolean;
   shown: boolean;
   hintsUsed: number;
+  /** 問題を出してから正解するまでの時間（ミリ秒） */
+  ms: number;
 }
 
 type FieldState = 'ok' | 'check' | undefined;
@@ -89,6 +95,8 @@ export default function Problem({
   // 解き方を見せている段（null＝見せていない）
   const [solution, setSolution] = useState<number | null>(null);
   const [solved, setSolved] = useState(false);
+  const [startedAt] = useState(Date.now());
+  const [solvedMs, setSolvedMs] = useState<number | null>(null);
   // ヒントの後、元の問題に一度答えたら「この2つを式に入れると？」は消す
   const [answeredAfterHints, setAnsweredAfterHints] = useState(false);
   const [laterSaved, setLaterSaved] = useState(false);
@@ -110,7 +118,7 @@ export default function Problem({
   const solutionSteps = useMemo(() => practiceSolution(problem), [problem]);
 
   const finish = () =>
-    onFinish({ attempts: wrong + 1, firstTry: wrong === 0 && solution === null, shown: solution !== null, hintsUsed: hints.used });
+    onFinish({ attempts: wrong + 1, firstTry: wrong === 0 && solution === null, shown: solution !== null, hintsUsed: hints.used, ms: solvedMs ?? Date.now() - startedAt });
 
   const markWrong = (which: 'a' | 'b' | 'both', extra: string[] = []) => {
     const n = wrong + 1;
@@ -131,9 +139,12 @@ export default function Problem({
   };
 
   const solve = (lines: string[]) => {
+    const ms = Date.now() - startedAt;
     f.closePad();
     setSolved(true);
-    setTalk(lines);
+    setSolvedMs(ms);
+    // 時間は解いている最中には見せず、正解した後にだけ見せる（ヒントを使った問題は計らない）
+    setTalk(hints.started ? lines : [...lines, fill(titleText.time, { t: formatTime(ms) })]);
   };
 
   // a と b を答える問題

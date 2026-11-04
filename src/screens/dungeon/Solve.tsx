@@ -18,7 +18,9 @@ import type { DungeonProblem, MethodId } from '../../lib/dungeon';
 import { asLine } from '../../lib/linear';
 import { isLearned, noteOrder } from '../../lib/notebook';
 import { load } from '../../lib/storage';
+import { formatTime } from '../../lib/results';
 import { fill } from '../../lib/text';
+import titleText from '../../content/titles.json';
 import LearnMethod from './Learn';
 import MethodCard from './MethodCard';
 
@@ -143,8 +145,10 @@ export default function Solve({
       if (isOk(ra) && isOk(rb)) {
         f.closePad();
         setStates(['ok', 'ok']);
-        setSolved({ ms: Date.now() - startedAt });
-        return setTalk(L.ok);
+        const ms = Date.now() - startedAt;
+        setSolved({ ms });
+        // 時間は解いている最中には見せず、正解した後にだけ見せる（ヒントを使った問題は計らない）
+        return setTalk(guided || hints.started ? L.ok : [...L.ok, fill(titleText.time, { t: formatTime(ms) })]);
       }
     }
     const n = wrong + 1;

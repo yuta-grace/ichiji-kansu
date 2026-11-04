@@ -7,6 +7,7 @@ import Dungeon from './screens/dungeon/Dungeon';
 import Home from './screens/Home';
 import type { PartId } from './screens/Home';
 import Later, { LaterView } from './screens/Later';
+import Mix from './screens/Mix';
 import Note from './screens/Note';
 import Practice from './screens/practice/Practice';
 import ProfileSelect from './screens/ProfileSelect';
@@ -67,6 +68,7 @@ export default function App() {
   if (part?.id === 'diagnostic') return <Diagnostic key={key} onExit={toLearn} />;
   if (part?.id === 'practice') return <Practice key={key} onExit={toLearn} resume={part.resume} />;
   if (part?.id === 'dungeon') return <Dungeon key={key} onExit={toLearn} />;
+  if (part?.id === 'mix') return <Mix key={key} onExit={toLearn} />;
   if (overlay) {
     const close = () => setOverlay(null);
     return (

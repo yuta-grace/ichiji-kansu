@@ -1,4 +1,5 @@
 import type { MethodId } from './dungeon';
+import type { ProblemResult } from './results';
 
 export interface NoteMethod {
   learnedAt: number;
@@ -57,6 +58,8 @@ export interface SaveData {
   /** 解き方ノート：学んだ解き方（学んだ時刻と、生徒が付けた名前） */
   notebook?: Partial<Record<MethodId, NoteMethod>>;
   later: LaterItem[];
+  /** 問題ごとの結果（称号と講師用画面の集計に使う） */
+  results?: ProblemResult[];
   /** 準備運動の結果。記録するだけで、他の機能には使わない（5.1） */
   diagnostic?: { done: boolean; results: { id: string; correct: boolean; answer: string }[] };
   log: LogEntry[];

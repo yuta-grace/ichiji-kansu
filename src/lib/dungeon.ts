@@ -16,6 +16,9 @@ export interface DungeonProblem {
   p2: number[];
   /** 最も楽そうな解き方のメモ（複数可）。称号の判定には使わない */
   best: string[];
+  /** 区分と、問題の型のタグ（複数可） */
+  level: string;
+  types: string[];
 }
 
 const T = content.lines.steps;

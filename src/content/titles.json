@@ -1,0 +1,29 @@
+{
+  "_説明": "称号の名前と台詞。【草案】プロジェクトで確認してから確定する。solved は「解いた数」の段階の名前（settings.json の solvedSteps と同じ順）。",
+  "solved": [
+    "見習い",
+    "一人前",
+    "達人"
+  ],
+  "speed": "スピード",
+  "heading": "称号",
+  "intro": [
+    "問題を解くと、入口ごとに称号が手に入るよ。"
+  ],
+  "solvedLabel": "解いた数",
+  "solvedNow": "{n}問 正解",
+  "solvedCond": "{n}問 正解",
+  "speedLabel": "スピード",
+  "speedCond": "目標タイム（{t}）以内の正解が{n}問",
+  "speedNow": "{n} / {need}問",
+  "time": "かかった時間：{t}",
+  "gained": "「{entry}」の称号「{title}」を手に入れた！",
+  "gainedMaster": "「{title}」になった！",
+  "master": "一次関数マスター",
+  "masterHeading": "一次関数マスター",
+  "masterCond": "すべての入口で「{top}」と「スピード」がそろい、すべての問題を一度は自力で正解すると、一次関数マスター",
+  "masterEntries": "そろった入口：{done} / {total}",
+  "masterUnsolved": "まだ自力で正解していない問題：{n}問",
+  "masterGot": "一次関数マスター！",
+  "entryComplete": "そろった"
+}

@@ -13,7 +13,7 @@ import { toString } from '../lib/fraction';
 import { asLine, eqText, linear, yAt } from '../lib/linear';
 import { practiceSolution } from '../lib/practiceSolution';
 import { load, openLater } from '../lib/storage';
-import type { LaterItem } from '../lib/storage';
+import type { LaterItem, SaveData } from '../lib/storage';
 import { fill } from '../lib/text';
 import Walkthrough from './dungeon/Walkthrough';
 
@@ -22,8 +22,8 @@ type PracticeProblem = { id: string; type: string; a: string; b: string; xs?: nu
 const dungeonById = (id: string) => (dungeon.problems as DungeonProblem[]).find((p) => p.id === id);
 const practiceById = (id: string) => (practice.problems as PracticeProblem[]).find((p) => p.id === id);
 
-/** 一覧・講師用画面に出す見出し（問題と、あれば解き方） */
-export function laterLabel(it: LaterItem): { title: string; sub: string } {
+/** 一覧・講師用画面に出す見出し（問題と、あれば解き方）。d は、その生徒の記録（解き方の名前に使う） */
+export function laterLabel(it: LaterItem, d: SaveData = load()): { title: string; sub: string } {
   if (it.part === 'practice') {
     const p = practiceById(it.problemId);
     const title = p ? (p.type === 'eq-graph' ? eqText(linear(p.a, p.b)).replace(/\[|\]/g, '') : T.typeLabel[p.type as keyof typeof T.typeLabel]) : it.problemId;
@@ -32,7 +32,7 @@ export function laterLabel(it: LaterItem): { title: string; sub: string } {
   const p = dungeonById(it.problemId);
   return {
     title: p ? pointsText(p) : it.problemId,
-    sub: `${it.method ? methodLabel(load(), it.method) : ''}（${it.from === 'solving' ? T.fromSolving : T.fromOthers}）`,
+    sub: `${it.method ? methodLabel(d, it.method) : ''}（${it.from === 'solving' ? T.fromSolving : T.fromOthers}）`,
   };
 }
 

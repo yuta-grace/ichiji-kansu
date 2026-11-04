@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import settings from '../content/settings.json';
+import { entryLabel, formatTime, recentStats, resultsOf } from '../lib/results';
+import type { ProblemResult } from '../lib/results';
 import MathText from '../components/MathText';
 import content from '../content/profile.json';
 import { checkTeacherPin, deleteProfile, hasTeacherPin, listProfiles, loadProfileData, setTeacherPin, updateProfileData } from '../lib/storage';
@@ -6,6 +9,39 @@ import { fill } from '../lib/text';
 import { laterLabel } from './Later';
 
 const T = content.teacher;
+const ST = T.stats;
+type By = 'type' | 'entry';
+
+/** 直近の問題の系統別タイム（5.12）。平均時間は正解した問題だけ。3問未満の系統は薄く */
+function RecentStats({ results, n, by }: { results: ProblemResult[]; n: number; by: By }) {
+  if (results.length === 0) return <p className="muted small">{ST.empty}</p>;
+  const rows = recentStats(results, n, by);
+  return (
+    <table className="stats">
+      <thead>
+        <tr>
+          <th>{ST.colGroup}</th>
+          <th>{ST.colTime}</th>
+          <th>{ST.colRate}</th>
+          <th>{ST.colCount}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key} className={r.count < settings.teacher.faintBelow ? 'faint' : ''}>
+            <td>{by === 'type' ? r.key : entryLabel(r.key)}</td>
+            <td>{r.avgMs === null ? ST.none : formatTime(r.avgMs)}</td>
+            <td>{r.count ? `${Math.round((r.correct / r.count) * 100)}%` : ST.none}</td>
+            <td>
+              {r.count}
+              {r.hinted > 0 && <small>（{fill(ST.hinted, { n: r.hinted })}）</small>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 const isPin = (s: string) => /^\d{4}$/.test(s);
 
 /** 最初に開いたときに、4桁の暗証番号を決めてもらう */
@@ -69,6 +105,9 @@ function DeleteProfile({ id, name, onDeleted }: { id: string; name: string; onDe
 export default function Teacher({ onExit }: { onExit: () => void }) {
   const [, refresh] = useState(0);
   const [pinReady, setPinReady] = useState(hasTeacherPin());
+  // 集計の範囲（直近 n 問。0 は全部）と分け方
+  const [n, setN] = useState(settings.teacher.recentDefault);
+  const [by, setBy] = useState<By>('type');
   const profiles = listProfiles();
 
   return (
@@ -82,15 +121,35 @@ export default function Teacher({ onExit }: { onExit: () => void }) {
       ) : (
         <>
           <p className="muted small">{T.intro}</p>
+          <div className="stats-controls">
+            <span className="muted small">{ST.title}：</span>
+            <div className="seg-small" role="group" aria-label={ST.recent}>
+              {settings.teacher.recentChoices.map((c) => (
+                <button key={c} type="button" className={n === c ? 'active' : ''} onClick={() => setN(c)}>
+                  {c === 0 ? ST.all : `${ST.recent}${fill(ST.count, { n: c })}`}
+                </button>
+              ))}
+            </div>
+            <div className="seg-small" role="group">
+              {(['type', 'entry'] as By[]).map((b) => (
+                <button key={b} type="button" className={by === b ? 'active' : ''} onClick={() => setBy(b)}>
+                  {b === 'type' ? ST.byType : ST.byEntry}
+                </button>
+              ))}
+            </div>
+            <p className="muted small">{ST.note}</p>
+          </div>
           {profiles.length === 0 && <p>{T.noProfiles}</p>}
           {profiles.map((p) => {
-            const items = loadProfileData(p.id).later;
+            const data = loadProfileData(p.id);
+            const items = data.later;
             return (
               <section key={p.id} className="title-card">
                 <h3>{p.name}</h3>
+                <h4 className="stats-title">{T.laterTitle}</h4>
                 {items.length === 0 && <p className="muted small">{T.none}</p>}
                 {items.map((it) => {
-                  const label = laterLabel(it);
+                  const label = laterLabel(it, data);
                   return (
                     <label key={it.id} className={`teacher-item ${it.asked ? 'asked' : ''}`}>
                       <input
@@ -111,6 +170,8 @@ export default function Teacher({ onExit }: { onExit: () => void }) {
                     </label>
                   );
                 })}
+                <h4 className="stats-title">{ST.title}</h4>
+                <RecentStats results={resultsOf(data)} n={n} by={by} />
                 <DeleteProfile id={p.id} name={p.name} onDeleted={() => refresh((n) => n + 1)} />
               </section>
             );
