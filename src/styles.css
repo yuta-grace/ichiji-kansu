@@ -1,0 +1,320 @@
+/* 見た目はシンプルに。グラフ・表は見やすさを優先する（7章） */
+:root {
+  --bg: #fafaf7;
+  --surface: #ffffff;
+  --ink: #1f2328;
+  --muted: #6b7078;
+  --line: #d9dbd6;
+  --grid: #e6e8e3;
+  --grid-major: #cfd3cc;
+  --primary: #2563a8;
+  --primary-ink: #ffffff;
+  --accent: #d9480f;
+  --hint: #e8a400;
+  --hint-bg: #fff4d1;
+  --ok: #2f8a4a;
+  --check: #e08a00;
+  --radius: 12px;
+  font-family: 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17191c;
+    --surface: #212429;
+    --ink: #e8eaed;
+    --muted: #9aa0a8;
+    --line: #3a3f46;
+    --grid: #2b2f35;
+    --grid-major: #3d434b;
+    --primary: #5b9be0;
+    --primary-ink: #0d1117;
+    --accent: #ff8a50;
+    --hint: #f0c040;
+    --hint-bg: #3a3218;
+    --ok: #5cc27a;
+    --check: #f0a030;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button { font: inherit; color: inherit; touch-action: manipulation; }
+
+.screen {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+
+/* 上のバー */
+.topbar { display: flex; align-items: center; gap: 12px; }
+.topbar .btn.small { min-height: 36px; }
+.progress { flex: 1; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.progress > div { height: 100%; background: var(--primary); transition: width 0.3s; }
+
+/* 博士 */
+.hakase { display: flex; gap: 10px; align-items: flex-start; }
+.hakase-icon { width: 38px; height: 38px; flex: none; }
+.hk-face { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.hk-glass { fill: none; stroke: var(--ink); stroke-width: 2; }
+.hk-mouth { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.bubble {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px var(--radius) var(--radius) var(--radius);
+  padding: 8px 12px;
+  font-size: 1rem;
+  line-height: 1.55;
+  flex: 1;
+}
+.bubble p { margin: 0; }
+.bubble p + p { margin-top: 2px; }
+
+.step { display: flex; flex-direction: column; gap: 10px; }
+.work { display: flex; flex-direction: column; gap: 10px; }
+.actions { display: flex; flex-direction: column; gap: 8px; }
+
+/*
+ * 学習中の画面は、画面の高さちょうどに収める（縦にスクロールさせない）。
+ * 博士の吹き出し・下の操作は必要な高さだけとり、残りをグラフに使う。
+ */
+.screen.fit { height: 100vh; height: 100dvh; padding-bottom: calc(10px + env(safe-area-inset-bottom)); gap: 10px; overflow: hidden; }
+.screen.fit .step { flex: 1; min-height: 0; }
+.screen.fit .work { flex: 1; min-height: 0; overflow-y: auto; }
+.screen.fit .hakase, .screen.fit .actions, .screen.fit .topbar { flex: none; }
+
+/* ボタン */
+.btn {
+  min-height: 48px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); font-weight: 600; }
+.btn.small { min-height: 40px; padding: 6px 12px; font-size: 0.95rem; }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.pulse { border-color: var(--hint); background: var(--hint-bg); animation: pulse 1.4s ease-in-out 3; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--hint-bg); } }
+
+.choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.btn.choice { min-height: 50px; }
+.btn.choice.tried { border-style: dashed; color: var(--muted); }
+.btn.choice.picked { border: 2px solid var(--primary); opacity: 1; }
+
+/* 数字入力 */
+.answer-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 1.15rem; }
+.field {
+  min-width: 64px;
+  min-height: 48px;
+  padding: 4px 10px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 1.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.field.active { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+.field.ok { border-color: var(--ok); }
+.field.check { border-color: var(--check); border-style: dashed; }
+.field.clue { background: var(--hint-bg); }
+.field-empty { min-width: 1em; }
+
+.frac-inline { display: inline-flex; align-items: center; gap: 2px; margin: 0 0.15em; }
+.frac { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; font-size: 0.85em; }
+.frac .num { border-bottom: 1.5px solid currentColor; padding: 0 3px; }
+.frac .den { padding: 0 3px; }
+
+.answer-bar { display: flex; flex-direction: column; gap: 8px; }
+.answer-buttons { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.answer-buttons .submit { min-width: 112px; }
+
+/* キーパッド：入力欄を押したときだけ、画面の下に2段で出す */
+.pad {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px;
+  user-select: none;
+}
+.pad-key {
+  min-height: 46px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.pad-key.op { background: var(--grid); font-size: 0.95rem; }
+.pad-key.close { grid-column: span 2; }
+.pad-key:active { transform: translateY(1px); }
+.pad-key:disabled { opacity: 0.35; }
+
+/* 式 */
+.equation { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 1.25rem; }
+.equation.big { font-size: 1.6rem; justify-content: center; font-family: 'Times New Roman', serif; }
+.equation .mark { color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 6px; }
+.equation .named { display: inline-flex; flex-direction: column; align-items: center; color: var(--accent); font-weight: 700; }
+.equation .named small { font-size: 0.75rem; font-family: 'Hiragino Sans', sans-serif; }
+
+/* 表 */
+.vtable-wrap { overflow-x: auto; }
+.vtable { border-collapse: collapse; margin: 0 auto; background: var(--surface); }
+.vtable th, .vtable td { border: 1px solid var(--grid-major); padding: 4px 6px; text-align: center; min-width: 48px; font-size: 1.05rem; }
+.vtable th { background: var(--grid); font-weight: 600; font-size: 0.85rem; max-width: 5.5em; line-height: 1.3; }
+.vtable td.hl { background: var(--hint-bg); outline: 2px solid var(--hint); outline-offset: -2px; }
+.vtable .field { min-width: 44px; min-height: 40px; padding: 2px 6px; }
+.vtable tr.diffs th, .vtable tr.diffs td { border: none; background: transparent; padding: 0; }
+.vtable .diff { position: relative; left: -50%; color: var(--accent); font-size: 0.9rem; font-weight: 600; }
+
+/* グラフ */
+.graph { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.graph-box { width: 100%; flex: 1; min-height: 150px; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+.graph-svg { touch-action: none; user-select: none; -webkit-user-select: none; flex: none; }
+.graph-svg.mode-plot, .graph-svg.mode-pick { cursor: crosshair; }
+.g-grid { stroke: var(--grid-major); stroke-width: 1; }
+.g-grid.minor { stroke: var(--grid); }
+.g-axis { stroke: var(--ink); stroke-width: 1.5; }
+.g-tick { fill: var(--muted); font-size: 12px; }
+.g-axis-label { fill: var(--ink); font-size: 13px; font-weight: 600; }
+.g-highlight { fill: var(--hint-bg); stroke: var(--hint); stroke-width: 1.5; }
+.g-line { stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
+.g-line.tone-faint { stroke: var(--grid-major); }
+.g-point circle { fill: var(--primary); }
+.g-point.tone-faint circle { fill: var(--grid-major); }
+.g-point.tone-accent circle { fill: none; stroke: var(--accent); stroke-width: 3; }
+.g-point.tone-hint circle { fill: none; stroke: var(--hint); stroke-width: 2.5; stroke-dasharray: 3 3; }
+.g-point text { fill: var(--accent); font-size: 13px; font-weight: 700; }
+.g-stair path { fill: none; stroke: var(--grid-major); stroke-width: 2.5; stroke-dasharray: 5 4; }
+.g-stair.tone-accent path { stroke: var(--accent); stroke-dasharray: none; }
+.g-stair text { fill: var(--accent); font-size: 12px; font-weight: 700; }
+.g-user { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.g-user.selected { stroke: var(--ink); stroke-width: 2.5; }
+.g-readout rect { fill: var(--ink); opacity: 0.85; }
+.g-readout text { fill: var(--bg); font-size: 14px; font-weight: 600; }
+.graph-tools { display: flex; align-items: center; gap: 12px; }
+.graph-tools .btn.small { min-height: 36px; }
+
+/* ホーム */
+.menu-title { font-size: 1rem; color: var(--muted); margin: 6px 0 0; font-weight: 500; }
+.menu { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.menu-item {
+  width: 100%;
+  min-height: 60px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 1.1rem;
+  cursor: pointer;
+  text-align: left;
+}
+.menu-item.suggested { border: 2px solid var(--primary); }
+.menu-item:disabled { opacity: 0.5; cursor: default; }
+.menu-note { font-size: 0.85rem; color: var(--muted); }
+.menu-item.suggested .menu-note { color: var(--primary); font-weight: 600; }
+
+/* 幅の狭いスマートフォン（iPhone SE など）で表が横にはみ出さないように */
+@media (max-width: 360px) {
+  .vtable th, .vtable td { padding: 4px 3px; min-width: 40px; font-size: 1rem; }
+  .vtable th { font-size: 0.75rem; max-width: 4.2em; }
+  .vtable .field { min-width: 36px; padding: 2px 4px; font-size: 1.15rem; }
+}
+
+/* 背の低いスマートフォン（ブラウザのバーを除いて高さ 640px 以下）では、グラフに高さを回す */
+@media (max-height: 640px) {
+  .screen.fit { padding-top: 8px; gap: 8px; }
+  .screen.fit .step, .screen.fit .work { gap: 8px; }
+  .topbar .btn.small { min-height: 30px; padding: 2px 10px; font-size: 0.85rem; }
+  .hakase-icon { width: 30px; height: 30px; }
+  .bubble { font-size: 0.95rem; line-height: 1.45; padding: 6px 10px; }
+  .btn { min-height: 44px; padding: 8px 14px; }
+  .btn.choice { min-height: 44px; }
+  .pad-key { min-height: 42px; }
+  .field { min-height: 44px; }
+  .vtable th, .vtable td { padding: 2px 4px; }
+  .vtable th { font-size: 0.72rem; }
+  .graph-tools .btn.small { min-height: 30px; padding: 2px 10px; font-size: 0.85rem; }
+  .annotation { font-size: 0.78rem; padding: 2px 8px; gap: 0; }
+}
+
+/* 準備運動などの問題の式 */
+.problem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Times New Roman', 'Hiragino Mincho ProN', serif;
+  font-size: 2.2rem;
+  padding: 12px;
+  text-align: center;
+}
+
+/* 練習：注釈と、見出しつきの入力欄 */
+.annotation { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 4px 10px; flex: none; }
+.labeled-field, .hint-field { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
+.labeled-field small, .hint-field small { font-size: 0.72rem; color: var(--muted); line-height: 1; }
+.screen.fit .work > .equation.big, .screen.fit .work > .vtable-wrap { flex: none; }
+
+/* ヒントでわかったこと（元の問題に戻っても残す） */
+.hint-found { display: flex; flex-direction: column; gap: 2px; flex: none; background: var(--hint-bg); border: 1px solid var(--hint); border-radius: 8px; padding: 4px 10px; font-size: 0.95rem; }
+.hint-found-title { font-size: 0.75rem; color: var(--muted); }
+
+/* ダンジョン */
+.points-card { flex: none; text-align: center; font-size: 1.35rem; font-family: 'Times New Roman', serif; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.clue-box .hint-found { outline: 3px solid var(--hint); }
+.method-choices { display: flex; flex-direction: column; gap: 8px; }
+.method-choice { display: flex; justify-content: space-between; align-items: center; text-align: left; }
+.method-choice small { color: var(--muted); font-size: 0.8rem; }
+.result-time { font-size: 1.2rem; text-align: center; flex: none; }
+.titles { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.title-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.title-card.master { border: 2px solid var(--primary); }
+.title-card h3 { margin: 0; font-size: 1.05rem; }
+.title-row { display: flex; gap: 8px; align-items: baseline; font-size: 0.9rem; }
+.title-row .badge { flex: none; min-width: 7.5em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); text-align: center; color: var(--muted); }
+.title-row .badge.got { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+.title-row .cond { color: var(--muted); font-size: 0.8rem; }
+
+/* ニックネーム */
+.profile-form { display: flex; flex-direction: column; gap: 10px; }
+.text-input { font: inherit; font-size: 1.2rem; padding: 12px 14px; border: 2px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
+.text-input:focus { outline: none; border-color: var(--primary); }
+.notice { margin: 0; color: var(--accent); font-weight: 600; }
+.error { margin: 0; color: var(--check); }
+.btn.big-continue { min-height: 64px; font-size: 1.25rem; }
+
+/* 他のやり方・あとで聞く */
+.other-method { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; }
+.other-name { flex: 1; display: flex; flex-direction: column; }
+.other-name small { color: var(--muted); font-size: 0.75rem; }
+.later-method { display: block; color: var(--muted); font-size: 0.8rem; }
+
+/* 講師用 */
+.teacher-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.teacher-item input { width: 22px; height: 22px; flex: none; }
+.teacher-item > span:nth-child(2) { flex: 1; }
+.teacher-item.asked > span:nth-child(2) { text-decoration: line-through; color: var(--muted); }
+.btn.danger { color: var(--check); align-self: flex-start; }
+.profile-bar { justify-content: space-between; }
+.pin-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pin-row .text-input { width: 9em; font-size: 1rem; padding: 8px 10px; }
+.pin-row .error { width: 100%; }

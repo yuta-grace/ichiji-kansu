@@ -1,0 +1,22 @@
+{
+  "_説明": "補助の切り替え・称号・注釈などの数値。すべて設計書の初期値。試用後にここだけ変えればよい。",
+  "attemptsBeforeAnswerShown": 3,
+  "practice": {
+    "annotationHideAfterStreak": 3,
+    "suggestHintAfterWrong": 2,
+    "showSolutionAfterWrong": 4,
+    "sameTypeAgainAfter": 2
+  },
+  "dungeon": {
+    "stageAStreakToStageB": 3,
+    "stageBWrongReturnsToAFor": 1,
+    "titleUsableCount": 3,
+    "suggestHintAfterWrong": 2,
+    "showSolutionAfterWrong": 4,
+    "titleFamiliarCount": 10
+  },
+  "graph": {
+    "minCellPx": 26,
+    "maxCellPx": 56
+  }
+}

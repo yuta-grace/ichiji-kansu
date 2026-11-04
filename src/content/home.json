@@ -1,0 +1,76 @@
+{
+  "_説明": "ホーム（入口の提案）の台詞とメニュー名。【草案】プロジェクトで確認してから確定する。",
+  "ask": [
+    "一次関数、どれくらい知ってる？"
+  ],
+  "answers": [
+    {
+      "id": "beginner",
+      "label": "あまり知らない"
+    },
+    {
+      "id": "some",
+      "label": "ある程度知っている"
+    }
+  ],
+  "suggest": {
+    "beginner": [
+      "じゃあ、水そうの話から始めよう。"
+    ],
+    "some": [
+      "じゃあ、練習かダンジョンから始めてみよう。"
+    ]
+  },
+  "suggestFor": {
+    "beginner": [
+      "understanding"
+    ],
+    "some": [
+      "practice",
+      "dungeon"
+    ]
+  },
+  "menuTitle": "どこから始めてもいいよ",
+  "menu": [
+    {
+      "id": "diagnostic",
+      "label": "準備運動",
+      "note": "6問"
+    },
+    {
+      "id": "understanding",
+      "label": "水そうの話",
+      "note": "約7分"
+    },
+    {
+      "id": "practice",
+      "label": "練習",
+      "note": "9問"
+    },
+    {
+      "id": "dungeon",
+      "label": "解法ダンジョン",
+      "note": "2点から式"
+    },
+    {
+      "id": "titles",
+      "label": "称号",
+      "note": ""
+    },
+    {
+      "id": "later",
+      "label": "あとで聞く",
+      "note": ""
+    }
+  ],
+  "suggestedMark": "博士のおすすめ",
+  "notReady": "準備中",
+  "resume": {
+    "ask": [
+      "前の続きから始める？"
+    ],
+    "continue": "続きから",
+    "restart": "最初から"
+  },
+  "changeAnswer": "答えを変える"
+}
