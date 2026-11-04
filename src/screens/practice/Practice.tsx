@@ -13,11 +13,12 @@ const typeOf = (id: string) => byId.get(id)?.type ?? '';
 const initialQueue = () => content.problems.map((p) => p.id);
 
 // 練習：3方向を混ぜて9問（5.3）。ダンジョンへ進む条件はつけない
-export default function Practice({ onExit }: { onExit: () => void }) {
+// resume：学ぶの「続きから」カードから入ったときは、続きから始めるかを聞かない
+export default function Practice({ onExit, resume = false }: { onExit: () => void; resume?: boolean }) {
   const saved = load().practice;
   const canResume = !!saved && !saved.done && saved.pos > 0 && saved.queue.every((id) => byId.has(id));
   const [queue, setQueue] = useState<string[]>(canResume ? saved!.queue : initialQueue());
-  const [pos, setPos] = useState(canResume ? -1 : 0);
+  const [pos, setPos] = useState(canResume ? (resume ? saved!.pos : -1) : 0);
   // 注釈を消すための連続正解（3方向まとめて数える）。間違えたら0から数え直す
   const [streak, setStreak] = useState(saved?.streak ?? 0);
   const [startedAt, setStartedAt] = useState(Date.now());

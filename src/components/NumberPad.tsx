@@ -20,21 +20,20 @@ export function applyKey(value: string, key: PadKey): string {
 }
 
 // スマートフォンで画面を縦にスクロールさせないよう、2段に並べる
-const KEYS: { key: PadKey | 'close'; label: string }[] = [
+const KEYS: { key: PadKey; label: string }[] = [
   { key: '1', label: '1' }, { key: '2', label: '2' }, { key: '3', label: '3' }, { key: '4', label: '4' },
   { key: '5', label: '5' }, { key: '6', label: '6' }, { key: '7', label: '7' }, { key: '8', label: '8' },
   { key: '9', label: '9' }, { key: '0', label: '0' }, { key: '-', label: '−' }, { key: '/', label: '分数' },
-  { key: '.', label: '.' }, { key: 'back', label: '⌫' }, { key: 'close', label: '閉じる' },
+  { key: '.', label: '.' }, { key: 'back', label: '⌫' },
 ];
 
 interface PadProps {
   onKey: (k: PadKey) => void;
-  onClose: () => void;
   /** 分数・小数のキーを出すか */
   allowFraction?: boolean;
 }
 
-export function NumberPad({ onKey, onClose, allowFraction = true }: PadProps) {
+export function NumberPad({ onKey, allowFraction = true }: PadProps) {
   return (
     <div className="pad">
       {KEYS.map(({ key, label }) => {
@@ -43,11 +42,11 @@ export function NumberPad({ onKey, onClose, allowFraction = true }: PadProps) {
           <button
             key={key}
             type="button"
-            className={`pad-key ${/^\d$/.test(key) ? '' : 'op'} ${key === 'close' ? 'close' : ''}`}
+            className={`pad-key ${/^\d$/.test(key) ? '' : 'op'}`}
             disabled={off}
             // 押したときに入力欄のフォーカスが外れないように
             onPointerDown={(e) => e.preventDefault()}
-            onClick={() => (key === 'close' ? onClose() : onKey(key))}
+            onClick={() => onKey(key)}
           >
             {label}
           </button>

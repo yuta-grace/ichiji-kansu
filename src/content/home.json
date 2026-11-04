@@ -1,5 +1,10 @@
 {
-  "_説明": "ホーム（入口の提案）の台詞とメニュー名。【草案】プロジェクトで確認してから確定する。",
+  "_説明": "学ぶ（ホーム）とタブの台詞・入口の名前。【草案】プロジェクトで確認してから確定する。level は区分のラベル（基本・標準・発展・生活）。ready が false の入口は「準備中」として押せない。",
+  "tabs": {
+    "learn": "学ぶ",
+    "note": "ノート",
+    "later": "後で聞く"
+  },
   "ask": [
     "一次関数、どれくらい知ってる？"
   ],
@@ -15,12 +20,15 @@
   ],
   "suggest": {
     "beginner": [
-      "じゃあ、水そうの話から始めよう。"
+      "まずは「仕組みを知る（水槽）」から始めよう。"
     ],
     "some": [
-      "じゃあ、練習かダンジョンから始めてみよう。"
+      "まずは「傾きと切片を読む」から始めてみよう。"
     ]
   },
+  "welcomeBack": [
+    "前の続きから始めよう。"
+  ],
   "suggestFor": {
     "beginner": [
       "understanding"
@@ -30,41 +38,79 @@
       "dungeon"
     ]
   },
-  "menuTitle": "どこから始めてもいいよ",
-  "menu": [
+  "groups": [
     {
-      "id": "diagnostic",
-      "label": "準備運動",
-      "note": "6問"
+      "title": "はじめに",
+      "items": [
+        {
+          "id": "diagnostic",
+          "label": "準備運動"
+        },
+        {
+          "id": "understanding",
+          "label": "仕組みを知る（水槽）"
+        }
+      ]
     },
     {
-      "id": "understanding",
-      "label": "水そうの話",
-      "note": "約7分"
+      "title": "問題を解く",
+      "items": [
+        {
+          "id": "practice",
+          "level": "基本",
+          "label": "傾きと切片を読む"
+        },
+        {
+          "id": "dungeon",
+          "level": "標準",
+          "label": "2点から式を作る"
+        },
+        {
+          "id": "points",
+          "level": "標準",
+          "label": "交点と直線上の点",
+          "ready": false
+        },
+        {
+          "id": "figures",
+          "level": "発展",
+          "label": "座標と図形",
+          "ready": false
+        },
+        {
+          "id": "life",
+          "level": "生活",
+          "label": "暮らしの中の一次関数",
+          "ready": false
+        }
+      ]
     },
     {
-      "id": "practice",
-      "label": "練習",
-      "note": "9問"
-    },
-    {
-      "id": "dungeon",
-      "label": "解法ダンジョン",
-      "note": "2点から式"
-    },
-    {
-      "id": "titles",
-      "label": "称号",
-      "note": ""
-    },
-    {
-      "id": "later",
-      "label": "あとで聞く",
-      "note": ""
+      "title": "ミックス",
+      "items": [
+        {
+          "id": "mix",
+          "label": "ミックス",
+          "ready": false
+        }
+      ]
     }
   ],
+  "progress": {
+    "notStarted": "{n}問",
+    "minutes": "約{n}分",
+    "midway": "途中",
+    "count": "{done} / {n}問",
+    "solved": "{n}問 解いた",
+    "done": "済み",
+    "notReady": "準備中"
+  },
+  "card": {
+    "start": "始める",
+    "resume": "続きから始める",
+    "fromN": "{n}問目から始める"
+  },
   "suggestedMark": "博士のおすすめ",
-  "notReady": "準備中",
   "resume": {
     "ask": [
       "前の続きから始める？"
@@ -72,5 +118,13 @@
     "continue": "続きから",
     "restart": "最初から"
   },
-  "changeAnswer": "答えを変える"
+  "back": "戻る",
+  "changeAnswer": "最初の質問に答え直す",
+  "note": {
+    "methods": "解き方",
+    "titles": "称号",
+    "methodsSoon": [
+      "2点から式を作るときに学んだ解き方が、ここに並ぶよ。"
+    ]
+  }
 }

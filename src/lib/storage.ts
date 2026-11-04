@@ -1,4 +1,9 @@
-import type { MethodId, MethodProgress } from './dungeon';
+import type { MethodId } from './dungeon';
+
+export interface NoteMethod {
+  learnedAt: number;
+  name?: string;
+}
 
 // 端末内（localStorage）への保存。サーバーには送らない（8章）。
 // 1台を複数の生徒で使うため、記録はニックネームごとに分ける。本名は入れないよう画面で伝える。
@@ -7,7 +12,7 @@ import type { MethodId, MethodProgress } from './dungeon';
 const KEY = 'ichiji-kansu.v2';
 
 export interface LogEntry {
-  part: 'entry' | 'diagnostic' | 'understanding' | 'practice' | 'dungeon';
+  part: 'entry' | 'diagnostic' | 'understanding' | 'practice' | 'dungeon' | 'notebook';
   step: string;
   /** 正解までにかかった回数（3回目で答えを見せた場合は shown: true） */
   attempts?: number;
@@ -36,6 +41,8 @@ export interface LaterItem {
 
 export interface SaveData {
   entryAnswer?: 'beginner' | 'some';
+  /** 最後に入った入口（学ぶの「続きから」カードに出す） */
+  lastPart?: string;
   understanding: {
     /** 途中から再開するためのステップ */
     stepId?: string;
@@ -45,20 +52,10 @@ export interface SaveData {
   };
   /** 練習の進み具合。queue は出題順（解き方を見せた後に並べかえることがある） */
   practice?: { queue: string[]; pos: number; streak: number; done: boolean };
-  /** 解法ダンジョンの進み具合と称号 */
-  dungeon?: {
-    intro3: boolean;
-    intro2: boolean;
-    /** 「連立で解く」を初めて選んだときの一言を言ったか */
-    chose1: boolean;
-    /** 次に出す問題（問題集の何番目か） */
-    pos: number;
-    methods: Partial<Record<MethodId, MethodProgress>>;
-    /** 解き比べをした組み合わせ（"modoru+renritsu" など） */
-    comparedPairs: string[];
-    /** 「他のやり方」で一度見た解き方 */
-    seenMethods: MethodId[];
-  };
+  /** 2点から式を作るの進み具合。pos：次に出す問題（問題集の何番目か）、solved：解いた問題の数、offered1：①を提案したか、seen：正解後に見たことのある解き方 */
+  dungeon?: { pos: number; solved?: number; offered1?: boolean; seen?: MethodId[] };
+  /** 解き方ノート：学んだ解き方（学んだ時刻と、生徒が付けた名前） */
+  notebook?: Partial<Record<MethodId, NoteMethod>>;
   later: LaterItem[];
   /** 準備運動の結果。記録するだけで、他の機能には使わない（5.1） */
   diagnostic?: { done: boolean; results: { id: string; correct: boolean; answer: string }[] };

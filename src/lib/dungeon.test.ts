@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import content from '../content/dungeon.json';
 import { frac, toString } from './fraction';
-import { applyResult, effectiveStage, methodSteps, newProgress, solutionLines } from './dungeon';
-import type { DungeonProblem, MethodProgress } from './dungeon';
+import { methodSteps, solutionLines } from './dungeon';
+import type { DungeonProblem } from './dungeon';
 
 const P = (id: string) => content.problems.find((p) => p.id === id)! as DungeonProblem;
 const ans = (steps: ReturnType<typeof methodSteps>) => steps.map((s) => s.answer && toString(s.answer));
 
-describe('解き方ごとの途中の問い（5.4 段階A）', () => {
+describe('解き方ごとのヒントの問い（5.4）', () => {
   it('① 連立：どちらの順に引いても正解。右の数は a の前の数と同じ順', () => {
     const p = P('連1'); // (12, 7) と (−9, 21)
     expect(ans(methodSteps('renritsu', p, []))).toEqual(['21', '-14', null]);
@@ -38,40 +38,5 @@ describe('解き方ごとの途中の問い（5.4 段階A）', () => {
       'そのとき y は 2 × (−1) ＝ −2 変わるから、x ＝ 0 のとき y は1。',
       '式は y ＝ 2x ＋ 1。',
     ]);
-  });
-});
-
-describe('段階の切り替えと称号（5.4）', () => {
-  const A = (correct: boolean, slopeSign = 1) => ({ stage: 'A' as const, correct, slopeSign, ms: 0 });
-  const B = (correct: boolean, ms: number) => ({ stage: 'B' as const, correct, slopeSign: 1, ms });
-
-  it('段階Aを3問続けて正解で段階Bへ。段階Bで間違えたら次の1問だけ段階A', () => {
-    let p = newProgress();
-    p = applyResult(p, A(true)).next;
-    p = applyResult(p, A(false)).next;
-    expect(p.streakA).toBe(0);
-    for (let i = 0; i < 3; i++) p = applyResult(p, A(true, i === 0 ? -1 : 1)).next;
-    expect(effectiveStage(p)).toBe('B');
-    p = applyResult(p, B(false, 50000)).next;
-    expect(effectiveStage(p)).toBe('A');
-    p = applyResult(p, A(false)).next;
-    expect(effectiveStage(p)).toBe('B');
-  });
-  it('使える：段階Aで3問正解、傾きの正と負を両方ふくむ', () => {
-    let p = newProgress();
-    for (let i = 0; i < 3; i++) p = applyResult(p, A(true, 1)).next;
-    expect(p.titles.usable).toBeUndefined();
-    const r = applyResult(p, A(true, -1));
-    expect(r.gained).toEqual(['usable']);
-  });
-  it('慣れた：段階Bで10問正解。タイム：最初の段階B記録より速い', () => {
-    let p: MethodProgress = { ...newProgress(), stage: 'B' };
-    p = applyResult(p, B(true, 60000)).next;
-    expect(applyResult(p, B(true, 40000)).gained).toEqual(['time']);
-    for (let i = 0; i < 8; i++) p = applyResult(p, B(true, 70000)).next;
-    expect(p.titles.familiar).toBeUndefined();
-    expect(applyResult(p, B(true, 70000)).gained).toEqual(['familiar']);
-    // 間違えた問題は数えない
-    expect(applyResult(p, B(false, 70000)).next.bCorrect).toBe(9);
   });
 });

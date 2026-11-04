@@ -1,6 +1,5 @@
-// 解法ダンジョンの計算（画面に依存しない部分）：解き方ごとの途中の問い、解き方の説明、段階の切り替え、称号
+// 2点から式を作るの計算（画面に依存しない部分）：解き方ごとの途中の問い（ヒント）と、解き方の説明
 import content from '../content/dungeon.json';
-import settings from '../content/settings.json';
 import { abs, add, div, frac, mul } from './fraction';
 import type { Frac } from './fraction';
 import { buildHints } from './hints';
@@ -10,8 +9,6 @@ import type { Linear } from './linear';
 import { fill } from './text';
 
 export type MethodId = 'modoru' | 'dainyu' | 'renritsu';
-export type Stage = 'A' | 'B';
-export type TitleKey = 'usable' | 'familiar' | 'time';
 
 export interface DungeonProblem {
   id: string;
@@ -22,9 +19,6 @@ export interface DungeonProblem {
 }
 
 const T = content.lines.steps;
-const D = settings.dungeon;
-
-export const methodName = (id: string) => content.methods.find((m) => m.id === id)?.name ?? id;
 
 export function problemLine(p: DungeonProblem): Linear {
   return lineThrough({ x: p.p1[0], y: p.p1[1] }, { x: p.p2[0], y: p.p2[1] })!;
@@ -64,7 +58,7 @@ function slopeSteps(p: DungeonProblem, line: Linear): HintStep[] {
 const finalStep = (): HintStep => ({ q: content.lines.final, answer: null, meaning: () => [], clue: [], show: [] });
 
 /**
- * 段階A（途中も答える）と段階Bのヒントで聞く問い。
+ * ヒントで聞く途中の問い（生徒が選んだ解き方で）。
  * picks：これまでの段で受け付けた値（どちらの点を使ったかで、次の問いの答えが変わる）
  */
 export function methodSteps(method: MethodId, p: DungeonProblem, picks: Frac[]): HintStep[] {
@@ -185,73 +179,3 @@ export function solutionLines(method: MethodId, p: DungeonProblem): string[] {
   };
   return S[method].map((t) => fill(t, vars));
 }
-
-// ---- 段階の切り替えと称号 ----
-
-export interface MethodProgress {
-  stage: Stage;
-  /** 段階Aで続けて正解した数 */
-  streakA: number;
-  /** 段階Bで間違えた後、段階Aに戻す残りの問題数 */
-  returnToA: number;
-  /** 段階Aの正解数と、その中の傾きが正・負の問題の数 */
-  aCorrect: { n: number; pos: number; neg: number };
-  /** 段階Bの正解数 */
-  bCorrect: number;
-  /** 段階Bの最初の正解の時間（ミリ秒） */
-  firstB?: number;
-  titles: Partial<Record<TitleKey, boolean>>;
-}
-
-export const newProgress = (): MethodProgress => ({
-  stage: 'A', streakA: 0, returnToA: 0, aCorrect: { n: 0, pos: 0, neg: 0 }, bCorrect: 0, titles: {},
-});
-
-export const effectiveStage = (p: MethodProgress): Stage => (p.returnToA > 0 ? 'A' : p.stage);
-
-export interface SolveResult {
-  stage: Stage;
-  /** 段階A：途中の値は何度でも直してよく、最後の a と b を一度で正解。段階B：一度も間違えずに正解。どちらも解き方を見せていない */
-  correct: boolean;
-  slopeSign: number;
-  ms: number;
-}
-
-/** 結果を反映し、新しく手に入れた称号を返す */
-export function applyResult(prev: MethodProgress, r: SolveResult): { next: MethodProgress; gained: TitleKey[] } {
-  const p: MethodProgress = { ...prev, aCorrect: { ...prev.aCorrect }, titles: { ...prev.titles } };
-  if (r.stage === 'A') {
-    if (p.returnToA > 0) {
-      // 段階Bで間違えた後の「次の1問だけ段階A」
-      p.returnToA -= 1;
-    } else {
-      p.streakA = r.correct ? p.streakA + 1 : 0;
-      if (p.streakA >= D.stageAStreakToStageB) {
-        p.stage = 'B';
-        p.streakA = 0;
-      }
-    }
-    if (r.correct) {
-      p.aCorrect.n += 1;
-      if (r.slopeSign > 0) p.aCorrect.pos += 1;
-      if (r.slopeSign < 0) p.aCorrect.neg += 1;
-    }
-  } else if (!r.correct) {
-    p.returnToA = D.stageBWrongReturnsToAFor;
-  } else {
-    p.bCorrect += 1;
-    if (p.firstB === undefined) p.firstB = r.ms;
-    else if (r.ms < p.firstB) p.titles.time = true;
-  }
-  return withTitles(prev, p);
-}
-
-function withTitles(prev: MethodProgress, p: MethodProgress) {
-  const c = p.aCorrect;
-  if (c.n >= D.titleUsableCount && c.pos > 0 && c.neg > 0) p.titles.usable = true;
-  if (p.bCorrect >= D.titleFamiliarCount) p.titles.familiar = true;
-  const gained = (['usable', 'familiar', 'time'] as TitleKey[]).filter((k) => p.titles[k] && !prev.titles[k]);
-  return { next: p, gained };
-}
-
-export const isMaster = (p: MethodProgress) => !!(p.titles.usable && p.titles.familiar && p.titles.time);

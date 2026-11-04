@@ -34,12 +34,13 @@ const STEPS: { id: string; C: ComponentType<StepProps> }[] = [
   { id: 'おわり', C: StepEnd },
 ];
 
-export default function Understanding({ onExit }: { onExit: () => void }) {
+// resume：学ぶの「続きから」カードから入ったときは、続きから始めるかを聞かない
+export default function Understanding({ onExit, resume = false }: { onExit: () => void; resume?: boolean }) {
   const saved = load().understanding;
   // ステップを足したり並べかえたりしても再開位置がずれないよう、id で保存する
   const savedIndex = STEPS.findIndex((s) => s.id === saved.stepId);
   const canResume = savedIndex > 0 && !saved.done;
-  const [index, setIndex] = useState(canResume ? -1 : 0);
+  const [index, setIndex] = useState(canResume ? (resume ? savedIndex : -1) : 0);
   const [predictions, setPredictions] = useState<Record<string, string>>(saved.predictions ?? {});
   const [startedAt, setStartedAt] = useState(Date.now());
 

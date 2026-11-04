@@ -447,7 +447,7 @@ export function StepRevEquation({ onDone }: StepProps) {
 
 export function StepEnd({ onDone }: StepProps) {
   return (
-    <StepView lines={say(L.end.say)} actions={<NextButton onClick={() => onDone({})} label="ホームへ" />}>
+    <StepView lines={say(L.end.say)} actions={<NextButton onClick={() => onDone({})} label="戻る" />}>
       <div className="equation big">y ＝ {T.rate}x ＋ {T.start}</div>
       <TankGraph points={tankPoints().map((p) => ({ ...p, tone: 'main' as const }))} lines={[tankLine()]} />
     </StepView>

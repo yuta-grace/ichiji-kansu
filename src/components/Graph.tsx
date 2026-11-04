@@ -295,7 +295,7 @@ export default function Graph(props: Props) {
             {userPoints.length}{Number.isFinite(maxUserPoints) ? ` / ${maxUserPoints}` : ''} 点
           </span>
           <button type="button" className="btn small ghost" onClick={removeSelected} disabled={userPoints.length === 0}>
-            {selected !== null ? 'えらんだ点を消す' : '最後の点を消す'}
+            {selected !== null ? '選んだ点を消す' : '最後の点を消す'}
           </button>
         </div>
       )}

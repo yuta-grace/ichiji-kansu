@@ -4,7 +4,8 @@ import { NumberPad, keyFromKeyboard } from './NumberPad';
 import type { Fields } from './useFields';
 
 /**
- * 画面の下に置く答えの欄：入力欄・「こたえる」ボタン・（入力欄を押したときだけ）キーパッド。
+ * 画面の下に置く答えの欄：入力欄・「こたえる」ボタン・キーパッド。
+ * キーパッドは最初から出しておく（点を打つ問題では、グラフを隠さないよう入力欄を押したときだけ）。
  * Mac では物理キーボードで数字を入れ、Enter で答え、Tab で次の欄へ移る。
  */
 export default function AnswerBar({
@@ -16,6 +17,7 @@ export default function AnswerBar({
   allowFraction = true,
   disabled,
   tabCount,
+  padOnTap,
 }: {
   f: Fields;
   onSubmit: () => void;
@@ -27,6 +29,8 @@ export default function AnswerBar({
   disabled?: boolean;
   /** Tab で回る欄の数（表示していない欄を飛ばすため） */
   tabCount?: number;
+  /** キーパッドを入力欄を押したときだけ出す（点を打つ問題） */
+  padOnTap?: boolean;
 }) {
   // キーボードの処理は最新の値を使うため ref 経由で呼ぶ
   const latest = useRef({ f, onSubmit, allowFraction, tabCount });
@@ -62,7 +66,7 @@ export default function AnswerBar({
           </button>
         </div>
       </div>
-      {f.padOpen && <NumberPad onKey={f.onKey} onClose={f.closePad} allowFraction={allowFraction} />}
+      {(!padOnTap || f.padOpen) && <NumberPad onKey={f.onKey} allowFraction={allowFraction} />}
     </div>
   );
 }

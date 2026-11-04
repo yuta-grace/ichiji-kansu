@@ -63,8 +63,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .progress > div { height: 100%; background: var(--primary); transition: width 0.3s; }
 
 /* 博士 */
-.hakase { display: flex; gap: 10px; align-items: flex-start; }
-.hakase-icon { width: 38px; height: 38px; flex: none; }
+.hakase { display: flex; gap: 10px; align-items: flex-start; -webkit-user-select: none; user-select: none; }
+.hakase-icon { width: 38px; height: 38px; flex: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 .hk-face { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
 .hk-glass { fill: none; stroke: var(--ink); stroke-width: 2; }
 .hk-mouth { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
@@ -144,10 +144,10 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .answer-buttons { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .answer-buttons .submit { min-width: 112px; }
 
-/* キーパッド：入力欄を押したときだけ、画面の下に2段で出す */
+/* キーパッド：数字で答える問題では最初から、画面の下に2段で出す */
 .pad {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 5px;
   user-select: none;
 }
@@ -161,7 +161,6 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
   cursor: pointer;
 }
 .pad-key.op { background: var(--grid); font-size: 0.95rem; }
-.pad-key.close { grid-column: span 2; }
 .pad-key:active { transform: translateY(1px); }
 .pad-key:disabled { opacity: 0.35; }
 
@@ -270,8 +269,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* 練習：注釈と、見出しつきの入力欄 */
 .annotation { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 4px 10px; flex: none; }
-.labeled-field, .hint-field { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
-.labeled-field small, .hint-field small { font-size: 0.72rem; color: var(--muted); line-height: 1; }
+.labeled-field { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
+.labeled-field small { font-size: 0.72rem; color: var(--muted); line-height: 1; }
 .screen.fit .work > .equation.big, .screen.fit .work > .vtable-wrap { flex: none; }
 
 /* ヒントでわかったこと（元の問題に戻っても残す） */
@@ -318,3 +317,83 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .pin-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pin-row .text-input { width: 9em; font-size: 1rem; padding: 8px 10px; }
 .pin-row .error { width: 100%; }
+
+/* 画面の下のタブ（学ぶ／ノート／後で聞く）。問題を解いている間は出さない */
+.screen.tabbed { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
+}
+.tab {
+  flex: 1;
+  max-width: 240px;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.tab.active { color: var(--primary); font-weight: 600; }
+.tab-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 学ぶ（ホーム）：「続きから」カードと入口の一覧 */
+.continue-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 2px solid var(--primary);
+  background: var(--surface);
+}
+.continue-name { display: flex; align-items: center; gap: 8px; font-size: 1.15rem; font-weight: 600; }
+.entry-group { display: flex; flex-direction: column; gap: 8px; }
+.menu-label { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.level {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--grid);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.offer { display: flex; flex-direction: column; gap: 8px; }
+
+/* ノート：解き方／称号の切り替え */
+.segmented { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.segmented button { min-height: 44px; border: none; background: var(--surface); color: var(--muted); cursor: pointer; }
+.segmented button.active { background: var(--primary); color: var(--primary-ink); font-weight: 600; }
+
+/* 解き方ノート：解き方のカード。まだ知らない解き方は内容にもやをかける */
+.method-list { display: flex; flex-direction: column; gap: 10px; }
+.method-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.method-body { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 10px 14px; border: none; background: none; text-align: left; position: relative; }
+button.method-body { cursor: pointer; min-height: 52px; }
+.method-head { display: flex; align-items: baseline; gap: 8px; }
+.method-no { font-size: 0.75rem; color: var(--muted); font-weight: 600; flex: none; }
+.method-name { font-size: 1.05rem; font-weight: 600; }
+.method-summary { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+.method-summary.fog { filter: blur(4px); user-select: none; }
+.method-card.unknown { border-style: dashed; }
+.method-card.unknown .method-name { color: var(--muted); }
+.fog-label { font-size: 0.85rem; color: var(--primary); font-weight: 600; }
+.method-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px 10px; }
+.name-form { display: flex; flex-direction: column; gap: 10px; }
+.name-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

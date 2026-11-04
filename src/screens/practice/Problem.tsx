@@ -19,7 +19,7 @@ import type { Pt } from '../../lib/graphMath';
 import { buildHints } from '../../lib/hints';
 import type { HintSpec, HintTexts } from '../../lib/hints';
 import { asLine, eqText, lineThrough, linear, onLine, yAt } from '../../lib/linear';
-import { practiceSolution } from '../../lib/practiceSolution';
+import { practiceHints, practiceSolution } from '../../lib/practiceSolution';
 import { fill } from '../../lib/text';
 
 export const L = content.lines;
@@ -66,10 +66,10 @@ export default function Problem({
   const line = useMemo(() => linear(problem.a, problem.b), [problem]);
   const prompt = L.prompt[type];
 
-  // ヒントの段は問題ごとに上書きできる（見えている変化から聞いて、1あたりに直す）
+  // ヒントの段：表は x の並びから決める（見えている変化から聞いて、1あたりに直す）。問題ごとに上書きもできる
   const hintSteps = useMemo(
     () =>
-      buildHints(problem.hints ?? (content.defaultHints as HintSpec[]), line, {
+      buildHints(practiceHints(problem), line, {
         type,
         where: L.where[type],
         texts: L.hintTexts as unknown as Record<string, HintTexts>,
@@ -252,8 +252,7 @@ export default function Problem({
     actions = (
       <>
         {hints.asking && (
-          <AnswerBar f={f} onSubmit={checkHint} submitLabel={L.check} tabCount={3} extra={laterButton}>
-            <span className="muted small">{L.hint}</span>
+          <AnswerBar f={f} onSubmit={checkHint} submitLabel={L.check} tabCount={3} extra={laterButton} padOnTap>
             <NumberField value={f.values[HINT_FIELD]} active onFocus={() => f.focus(HINT_FIELD)} state="clue" ariaLabel="ヒントの答え" />
           </AnswerBar>
         )}
@@ -283,10 +282,7 @@ export default function Problem({
         }
       >
         {hints.asking ? (
-          <span className="hint-field">
-            <small>{L.hint}</small>
-            <NumberField value={f.values[HINT_FIELD]} active onFocus={() => f.focus(HINT_FIELD)} state="clue" ariaLabel="ヒントの答え" />
-          </span>
+          <NumberField value={f.values[HINT_FIELD]} active onFocus={() => f.focus(HINT_FIELD)} state="clue" ariaLabel="ヒントの答え" />
         ) : (
           <SlopeInterceptFields f={f} states={states} />
         )}
@@ -313,7 +309,7 @@ export default function Problem({
         {type === 'table-eq' ? (
           <>
             <ValueTable xLabel="x" yLabel="y" xs={tableXs} ys={tableXs.map((x) => toString(yAt(line, x)))} highlight={tableHighlight} />
-            {solution !== null && solution >= 2 && (
+            {solution !== null && solution >= solutionSteps.length - 1 && (
               <div className="equation big">
                 <MathText text={eqText(line)} />
               </div>

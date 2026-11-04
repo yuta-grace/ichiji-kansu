@@ -1,6 +1,6 @@
 // 解き方の導入（5.4）
-// ③：問いの形で体験させ、解けた後で「戻って解く」と名前をつける
-// ②：③が面倒になる分数の問題で、③で解いた後に「別のやり方もあるよ」と②の手順を例として見せる
+// ③：問いの形で体験させ、解けた後でノートに保存して、名前を付けてもらう
+// ②：③が面倒になる分数の問題で、③で解いた後に「式に書いて解くやり方もあるよ」と②の手順を例として見せ、ノートに保存する
 import { useMemo, useState } from 'react';
 import AnswerBar from '../../components/AnswerBar';
 import Graph from '../../components/Graph';
@@ -15,7 +15,7 @@ import settings from '../../content/settings.json';
 import { checkNumber, isOk } from '../../lib/answer';
 import { change, buildHints } from '../../lib/hints';
 import type { HintSpec, HintTexts } from '../../lib/hints';
-import { methodName, pointsText, problemVars } from '../../lib/dungeon';
+import { pointsText, problemVars } from '../../lib/dungeon';
 import type { DungeonProblem } from '../../lib/dungeon';
 import { samePt } from '../../lib/graphMath';
 import type { Pt } from '../../lib/graphMath';
@@ -98,14 +98,14 @@ export function IntroModoru({ onDone }: { onDone: () => void }) {
     if (isOk(ra) && isOk(rb)) {
       f.closePad();
       setPhase('named');
-      return setTalk(L.intro3.naming);
+      return setTalk(L.ok);
     }
     setEqMiss(m);
     if (m >= settings.attemptsBeforeAnswerShown) {
       f.closePad();
       f.setValues([numText(line.a), numText(line.b), '']);
       setPhase('named');
-      return setTalk([...say(L.eqShow, { eq: `y ＝ ${numText(line.a)}x ＋ ${numText(line.b)}` }), ...L.intro3.naming]);
+      return setTalk(say(L.eqShow, { eq: `y ＝ ${numText(line.a)}x ＋ ${numText(line.b)}` }));
     }
     if (m === 2) {
       setEqClue(true);
@@ -161,7 +161,7 @@ export function IntroModoru({ onDone }: { onDone: () => void }) {
           <button
             type="button"
             className="btn primary"
-            onClick={() => (talk.join() === L.intro3.after.join() ? onDone() : setTalk(L.intro3.after))}
+            onClick={onDone}
           >
             {L.next}
           </button>
@@ -179,9 +179,9 @@ export function IntroDainyu({ problem, onDone }: { problem: DungeonProblem; onDo
   const example = L.intro2.example.map((t) => fill(t, vars));
 
   if (!outcome) {
-    return <Solve problem={problem} method="modoru" stage="A" intro={L.intro2.start} onDone={setOutcome} />;
+    return <Solve problem={problem} guided="modoru" intro={L.intro2.start} onDone={setOutcome} />;
   }
-  const lines = step < 0 ? L.intro2.after : step < example.length ? [example[step]] : L.intro2.naming;
+  const lines = step < 0 ? L.intro2.after : [example[step]];
   return (
     <div className="step">
       <Hakase lines={lines} />
@@ -189,10 +189,10 @@ export function IntroDainyu({ problem, onDone }: { problem: DungeonProblem; onDo
         <div className="points-card">
           {pointsText(problem)}
         </div>
-        {step >= 0 && <HintFound title={methodName('dainyu')} items={example.slice(0, Math.min(step + 1, example.length))} />}
+        {step >= 0 && <HintFound title={L.note.newName} items={example.slice(0, step + 1)} />}
       </div>
       <div className="actions">
-        <button type="button" className="btn primary" onClick={() => (step >= example.length ? onDone(outcome) : setStep(step + 1))}>
+        <button type="button" className="btn primary" onClick={() => (step >= example.length - 1 ? onDone(outcome) : setStep(step + 1))}>
           {L.next}
         </button>
       </div>

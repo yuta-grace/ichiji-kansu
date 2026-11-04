@@ -4,7 +4,7 @@ import type { PadKey } from './NumberPad';
 
 /**
  * 複数の数字入力欄と、共有のキーパッドをつなぐ。
- * キーパッドは入力欄を押したときだけ開く。物理キーボードは開いていなくても使える。
+ * padOpen は、キーパッドを入力欄を押したときだけ出す画面（点を打つ問題）で使う。物理キーボードはいつでも使える。
  */
 export function useFields(count: number, initial?: string[], initialActive = 0) {
   const [values, setValues] = useState<string[]>(initial ?? Array(count).fill(''));

@@ -23,7 +23,7 @@ export default function Diagnostic({ onExit }: { onExit: () => void }) {
 
   const record = (correct: boolean, answer: string, ms: number) => {
     const q = Q[index];
-    addLog({ part: 'diagnostic', step: q.id, attempts: 1, choice: correct ? '正解' : answer === '' ? 'わからない' : `誤答 ${answer}`, ms });
+    addLog({ part: 'diagnostic', step: q.id, attempts: 1, choice: correct ? '正解' : answer === '' ? '分からない' : `誤答 ${answer}`, ms });
     setResults((r) => [...r, { id: q.id, correct, answer }]);
   };
 

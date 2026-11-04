@@ -8,12 +8,9 @@
     "sameTypeAgainAfter": 2
   },
   "dungeon": {
-    "stageAStreakToStageB": 3,
-    "stageBWrongReturnsToAFor": 1,
-    "titleUsableCount": 3,
     "suggestHintAfterWrong": 2,
     "showSolutionAfterWrong": 4,
-    "titleFamiliarCount": 10
+    "offerUnknownAfterSolved": 5
   },
   "graph": {
     "minCellPx": 26,

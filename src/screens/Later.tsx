@@ -6,7 +6,8 @@ import ValueTable from '../components/ValueTable';
 import dungeon from '../content/dungeon.json';
 import practice from '../content/practice.json';
 import content from '../content/profile.json';
-import { methodName, pointsText } from '../lib/dungeon';
+import { pointsText } from '../lib/dungeon';
+import { isLearned, methodLabel, noteOrder } from '../lib/notebook';
 import type { DungeonProblem } from '../lib/dungeon';
 import { toString } from '../lib/fraction';
 import { asLine, eqText, linear, yAt } from '../lib/linear';
@@ -31,7 +32,7 @@ export function laterLabel(it: LaterItem): { title: string; sub: string } {
   const p = dungeonById(it.problemId);
   return {
     title: p ? pointsText(p) : it.problemId,
-    sub: `${it.method ? methodName(it.method) : ''}（${it.from === 'solving' ? T.fromSolving : T.fromOthers}）`,
+    sub: `${it.method ? methodLabel(load(), it.method) : ''}（${it.from === 'solving' ? T.fromSolving : T.fromOthers}）`,
   };
 }
 
@@ -80,45 +81,33 @@ export function LaterView({ item, onDone }: { item: LaterItem; onDone: () => voi
     return p ? <PracticeView problem={p} onDone={onDone} /> : null;
   }
   const problem = dungeonById(item.problemId);
-  if (!problem || !item.method) return null;
+  if (!problem) return null;
+  // 解き方が決まっていない（ヒントを使う前に残した）ときは、ノートの最初の解き方で見せる
+  const d = load();
+  const method = item.method ?? noteOrder(d).find((m) => isLearned(d, m)) ?? 'modoru';
   return (
     <Walkthrough
       problem={problem}
-      method={item.method}
-      intro={T.viewIntro.map((t) => fill(t, { m: methodName(item.method!) }))}
+      method={method}
+      intro={T.viewIntro.map((t) => fill(t, { m: methodLabel(d, method) }))}
       onDone={onDone}
     />
   );
 }
 
-// 生徒が自分で見る「あとで聞く」の一覧（講師が「聞いた」にしたものは出さない）
-export default function Later({ onExit }: { onExit: () => void }) {
+// 生徒が自分で見る「後で聞く」の一覧（講師が「聞いた」にしたものは出さない）
+export default function Later({ onView }: { onView: (it: LaterItem) => void }) {
   const items = openLater(load());
-  const [viewing, setViewing] = useState<LaterItem | null>(null);
-
-  if (viewing) {
-    return (
-      <div className="screen fit">
-        <header className="topbar">
-          <button type="button" className="btn small ghost" onClick={() => setViewing(null)}>{T.back}</button>
-        </header>
-        <LaterView item={viewing} onDone={() => setViewing(null)} />
-      </div>
-    );
-  }
   return (
-    <div className="screen">
-      <header className="topbar">
-        <button type="button" className="btn small ghost" onClick={onExit}>ホーム</button>
-        <h2 className="menu-title">{T.title}</h2>
-      </header>
+    <div className="screen tabbed">
+      <h2 className="menu-title">{T.title}</h2>
       <Hakase lines={items.length ? T.listIntro : T.empty} />
       <ul className="menu">
         {items.map((it) => {
           const label = laterLabel(it);
           return (
             <li key={it.id}>
-              <button type="button" className="menu-item" onClick={() => setViewing(it)}>
+              <button type="button" className="menu-item" onClick={() => onView(it)}>
                 <span className="menu-label">
                   <MathText text={label.title} />
                   <small className="later-method">{label.sub}</small>

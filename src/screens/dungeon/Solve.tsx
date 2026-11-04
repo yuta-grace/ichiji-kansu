@@ -1,4 +1,4 @@
-// ダンジョンの1回の解答：段階A（途中の値を答えてから a と b）／段階B（a と b だけ。ヒントで途中の問いをたどれる）
+// 2点から式を作るの1問：a と b を答えるだけ。ヒントを押したら、まずノートの解き方から1つ選ぶ（5.4）
 import { useMemo, useState } from 'react';
 import AnswerBar from '../../components/AnswerBar';
 import Graph from '../../components/Graph';
@@ -14,20 +14,29 @@ import settings from '../../content/settings.json';
 import { checkNumber, isOk } from '../../lib/answer';
 import type { Frac } from '../../lib/fraction';
 import { methodSteps, pointEquation, pointsText, problemLine, solutionLines } from '../../lib/dungeon';
-import type { DungeonProblem, MethodId, Stage } from '../../lib/dungeon';
+import type { DungeonProblem, MethodId } from '../../lib/dungeon';
 import { asLine } from '../../lib/linear';
+import { isLearned, noteOrder } from '../../lib/notebook';
+import { load } from '../../lib/storage';
 import { fill } from '../../lib/text';
+import LearnMethod from './Learn';
+import MethodCard from './MethodCard';
 
 export const L = content.lines;
 const S = settings.dungeon;
 const HINT_FIELD = 2;
 
 export interface SolveOutcome {
+  /** 解き方を見せずに正解した（途中で間違えて直した場合も含む） */
   correct: boolean;
+  /** 一度も間違えずに正解した */
+  firstTry: boolean;
   shown: boolean;
   ms: number;
   attempts: number;
   hintsUsed: number;
+  /** ヒントで選んだ解き方（記録用） */
+  hintMethod?: MethodId;
 }
 
 export function problemText(p: DungeonProblem) {
@@ -50,53 +59,61 @@ function graphRange(p: DungeonProblem) {
 
 export default function Solve({
   problem,
-  method,
-  stage,
+  guided,
   intro = [],
   onDone,
   onLater,
   doneLabel = L.next,
 }: {
   problem: DungeonProblem;
-  method: MethodId;
-  stage: Stage;
-  /** 最初に博士が言うこと（「それも1つのやり方だね」など） */
+  /** 導入：この解き方の途中の問いを最初から順にたどる（ヒントの選択はしない） */
+  guided?: MethodId;
+  /** 最初に博士が言うこと */
   intro?: string[];
   onDone: (o: SolveOutcome) => void;
-  /** 解いている途中の「あとで聞く」。渡さなければボタンを出さない */
-  onLater?: () => void;
+  /** 解いている途中の「後で聞く」。渡さなければボタンを出さない */
+  onLater?: (hintMethod?: MethodId) => void;
   doneLabel?: string;
 }) {
   const line = useMemo(() => problemLine(problem), [problem]);
+  // ヒントで選んだ解き方（導入では決まっている）
+  const [method, setMethod] = useState<MethodId | null>(guided ?? null);
   const [picks, setPicks] = useState<Frac[]>([]);
-  const steps = useMemo(() => methodSteps(method, problem, picks), [method, problem, picks]);
-  // 段階Aは、途中の問いから始める
-  const hints = useHintFlow(steps, stage === 'A');
-  const f = useFields(3, undefined, stage === 'A' ? HINT_FIELD : 0); // 0：傾き、1：切片、2：途中の値
+  const steps = useMemo(() => (method ? methodSteps(method, problem, picks) : []), [method, problem, picks]);
+  const hints = useHintFlow(steps, !!guided);
+  const f = useFields(3, undefined, guided ? HINT_FIELD : 0); // 0：傾き、1：切片、2：途中の値
   const [startedAt] = useState(Date.now());
   const [talk, setTalk] = useState<string[]>([...intro, problemText(problem)]);
   const [wrong, setWrong] = useState(0);
   const [states, setStates] = useState<('ok' | 'check' | undefined)[]>([]);
   const [askReduce, setAskReduce] = useState(false);
   const [nudge, setNudge] = useState(false);
-  const [solution, setSolution] = useState<number | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [learning, setLearning] = useState<MethodId | null>(null);
+  const [solution, setSolution] = useState<{ method: MethodId; step: number } | null>(null);
   const [solved, setSolved] = useState<{ ms: number } | null>(null);
   const [laterSaved, setLaterSaved] = useState(false);
-  const solutionSteps = useMemo(() => solutionLines(method, problem), [method, problem]);
+  const data = load();
+  const solutionSteps = useMemo(() => (solution ? solutionLines(solution.method, problem) : []), [solution, problem]);
 
   const finish = () =>
     onDone({
-      correct: solution === null && wrong === 0,
+      correct: solution === null,
+      firstTry: solution === null && wrong === 0,
       shown: solution !== null,
       ms: solved?.ms ?? Date.now() - startedAt,
       attempts: wrong + 1,
-      hintsUsed: stage === 'B' ? hints.used : 0,
+      hintsUsed: guided ? 0 : hints.started ? hints.used : 0,
+      hintMethod: guided ? undefined : (method ?? undefined),
     });
 
+  /** 解き方を見せる：ヒントで選んだ解き方、なければノートの最初の解き方で */
   const showSolution = () => {
+    const d = load();
+    const m = method ?? noteOrder(d).find((x) => isLearned(d, x)) ?? 'modoru';
     f.closePad();
-    setSolution(0);
-    setTalk([...L.solution.intro, solutionSteps[0]]);
+    setSolution({ method: m, step: 0 });
+    setTalk([...L.solution.intro, solutionLines(m, problem)[0]]);
   };
 
   const checkStep = () => {
@@ -133,29 +150,57 @@ export default function Solve({
     const n = wrong + 1;
     setWrong(n);
     setStates([isOk(ra) ? undefined : 'check', isOk(rb) ? undefined : 'check']);
-    // 段階Aは途中の問いをたどった後なので、2回目に違ったら解き方を見せる。
-    // 段階Bは練習と同じ（2回目にヒントを勧める。ヒントの後でも違ったら、またはヒントなしで何度も違ったら解き方）
-    if ((stage === 'A' && n >= 2) || (stage === 'B' && (hints.finished || n >= S.showSolutionAfterWrong))) return showSolution();
+    // 2回目にヒントを勧める。ヒントを最後までたどった後でも違ったら、またはヒントなしで何度も違ったら解き方を見せる
+    if (hints.finished || n >= S.showSolutionAfterWrong) return showSolution();
     const which = !isOk(ra) && !isOk(rb) ? 'both' : !isOk(ra) ? 'a' : 'b';
     const lines = [...L.wrong[which]];
-    if (stage === 'B' && n >= S.suggestHintAfterWrong && !hints.started) {
+    if (!guided && n >= S.suggestHintAfterWrong && !hints.started) {
       lines.push(...L.suggestHint);
       setNudge(true);
     }
     setTalk(lines);
   };
 
-  const openHint = () => {
+  const startHint = (m: MethodId) => {
+    setMethod(m);
+    setPicking(false);
     hints.start();
-    setNudge(false);
     setTalk([]);
     f.setValues([f.values[0], f.values[1], '']);
     f.setActive(HINT_FIELD);
   };
 
+  // まだ知らない解き方を学んでいる間は、この問題の状態を残したまま学ぶ画面を出す
+  if (learning) {
+    return (
+      <LearnMethod
+        method={learning}
+        from="ヒントの選択"
+        onDone={() => {
+          setLearning(null);
+          setPicking(false);
+          setTalk([...L.note.back, problemText(problem)]);
+        }}
+      />
+    );
+  }
+
   const range = graphRange(problem);
   const showEquations = method === 'renritsu' && hints.started && solution === null;
   const stepLine = hints.step && !solved && solution === null ? hints.step.q : null;
+  const laterButton = onLater && !laterSaved && (
+    <button
+      type="button"
+      className="btn small ghost"
+      onClick={() => {
+        onLater(method ?? undefined);
+        setLaterSaved(true);
+        setTalk(L.laterSaved);
+      }}
+    >
+      {L.laterButton}
+    </button>
+  );
 
   let actions;
   if (solved) {
@@ -166,14 +211,33 @@ export default function Solve({
         type="button"
         className="btn primary"
         onClick={() => {
-          if (solution >= solutionSteps.length - 1) return finish();
-          const n = solution + 1;
-          setSolution(n);
+          if (solution.step >= solutionSteps.length - 1) return finish();
+          const n = solution.step + 1;
+          setSolution({ ...solution, step: n });
           setTalk(n === solutionSteps.length - 1 ? [solutionSteps[n], ...L.solution.end] : [solutionSteps[n]]);
         }}
       >
         {L.next}
       </button>
+    );
+  } else if (picking) {
+    // どの解き方でヒントを見る？（まだ知らない解き方はもやつき。押すと例題で学ぶ）
+    actions = (
+      <div className="method-choices">
+        {noteOrder(data).map((m) => (
+          <MethodCard key={m} d={data} method={m} summary={false} onClick={() => (isLearned(data, m) ? startHint(m) : setLearning(m))} />
+        ))}
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={() => {
+            setPicking(false);
+            setTalk([problemText(problem)]);
+          }}
+        >
+          {L.note.cancel}
+        </button>
+      </div>
     );
   } else {
     actions = (
@@ -184,30 +248,25 @@ export default function Solve({
         tabCount={hints.asking ? 3 : 2}
         extra={
           <>
-            {onLater && !laterSaved && (
+            {laterButton}
+            {!guided && !hints.started && (
               <button
                 type="button"
-                className="btn small ghost"
+                className={`btn small ghost ${nudge ? 'pulse' : ''}`}
                 onClick={() => {
-                  onLater();
-                  setLaterSaved(true);
-                  setTalk(L.laterSaved);
+                  setNudge(false);
+                  setPicking(true);
+                  setTalk(L.hintPick);
                 }}
               >
-                {L.laterButton}
+                {L.hint}
               </button>
-            )}
-            {stage === 'B' && !hints.started && (
-              <button type="button" className={`btn small ghost ${nudge ? 'pulse' : ''}`} onClick={openHint}>{L.hint}</button>
             )}
           </>
         }
       >
         {hints.asking ? (
-          <span className="hint-field">
-            <small>{stage === 'A' ? '' : L.hint}</small>
-            <NumberField value={f.values[HINT_FIELD]} active onFocus={() => f.focus(HINT_FIELD)} state="clue" ariaLabel="途中の値" />
-          </span>
+          <NumberField value={f.values[HINT_FIELD]} active onFocus={() => f.focus(HINT_FIELD)} state="clue" ariaLabel="途中の値" />
         ) : (
           <EquationFieldsAB f={f} states={states} />
         )}
@@ -229,12 +288,12 @@ export default function Solve({
           </div>
         )}
         {hints.found.length > 0 && !solved && solution === null && <HintFound title={L.foundTitle} items={hints.found} />}
-        {solution !== null && solution >= solutionSteps.length - 1 && (
+        {solution !== null && solution.step >= solutionSteps.length - 1 && (
           <div className="equation big">
             <MathText text={solutionSteps[solutionSteps.length - 1].replace(/^式は |。$/g, '')} />
           </div>
         )}
-        {range && (
+        {range && !picking && (
           <Graph
             {...range}
             equalScale

@@ -64,7 +64,7 @@ function DeleteProfile({ id, name, onDeleted }: { id: string; name: string; onDe
   );
 }
 
-// 講師用画面（博士のアイコンを5秒長押し、または URL の末尾 #/teacher）
+// 講師用画面（博士のアイコンを3秒以内に5回タップ、または URL の末尾 #/teacher）
 // 一覧を見る・「聞いた」チェックは暗証番号なし。ニックネームの削除だけ暗証番号を聞く
 export default function Teacher({ onExit }: { onExit: () => void }) {
   const [, refresh] = useState(0);
