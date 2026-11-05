@@ -6,11 +6,13 @@ import practice from '../content/practice.json';
 import profileText from '../content/profile.json';
 import settings from '../content/settings.json';
 import { mixEntries } from './Mix';
+import { isTaskEntry, taskProblems } from '../lib/task';
+import type { TaskEntryId } from '../lib/task';
 import { addLog, currentProfile, load, openLater, sessionStartedAt, update } from '../lib/storage';
 import type { LaterItem, SaveData } from '../lib/storage';
 import { fill } from '../lib/text';
 
-export type PartId = 'diagnostic' | 'understanding' | 'practice' | 'dungeon' | 'mix';
+export type PartId = 'diagnostic' | 'understanding' | 'practice' | 'dungeon' | 'mix' | TaskEntryId;
 
 const LT = profileText.later;
 const P = home.progress;
@@ -27,7 +29,7 @@ interface Entry {
 }
 const ENTRIES: Entry[] = home.groups.flatMap((g) => g.items as Entry[]);
 const entryOf = (id: string) => ENTRIES.find((e) => e.id === id);
-const isPart = (id: string): id is PartId => ['diagnostic', 'understanding', 'practice', 'dungeon', 'mix'].includes(id);
+const isPart = (id: string): id is PartId => ['diagnostic', 'understanding', 'practice', 'dungeon', 'mix'].includes(id) || isTaskEntry(id);
 
 /** 入口ごとの進み具合：一覧に出す文字と、「続きから」カードのボタン */
 function status(id: PartId, d: SaveData): { note: string; done: boolean; button: string } {
@@ -56,6 +58,14 @@ function status(id: PartId, d: SaveData): { note: string; done: boolean; button:
     }
     case 'mix':
       return { note: fill(P.notStarted, { n: settings.mix.count }), done: false, button: home.card.start };
+    default: {
+      // 新しい入口：傾きと切片を読むと同じ（○問目から）
+      const n = taskProblems(id).length;
+      const t = d.tasks?.[id];
+      if (t?.done) return { note: P.done, done: true, button: home.card.start };
+      if (t && t.pos > 0) return { note: fill(P.count, { done: t.pos, n }), done: false, button: fill(home.card.fromN, { n: t.pos + 1 }) };
+      return { note: fill(P.notStarted, { n }), done: false, button: home.card.start };
+    }
   }
 }
 

@@ -194,6 +194,10 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .g-highlight { fill: var(--hint-bg); stroke: var(--hint); stroke-width: 1.5; }
 .g-line { stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
 .g-line.tone-faint { stroke: var(--grid-major); }
+.g-line.tone-accent { stroke: var(--accent); }
+.g-line-name { fill: var(--ink); font-size: 15px; font-weight: 700; font-style: italic; }
+.g-polygon { fill: var(--primary); opacity: 0.14; stroke: none; }
+.g-polygon.tone-accent { fill: var(--accent); opacity: 0.2; }
 .g-point circle { fill: var(--primary); }
 .g-point.tone-faint circle { fill: var(--grid-major); }
 .g-point.tone-accent circle { fill: none; stroke: var(--accent); stroke-width: 3; }
@@ -421,3 +425,61 @@ button.method-body { cursor: pointer; min-height: 52px; }
 .title-card.complete { border-color: var(--primary); }
 .complete-mark { margin-left: 8px; font-size: 0.75rem; color: var(--primary); font-weight: 600; }
 .master-card h3 { font-size: 1.1rem; }
+
+/* F：場面カード（問題の場面が分かる短い文） */
+.scene-card { flex: none; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--primary); border-radius: 8px; padding: 6px 10px; font-size: 0.92rem; line-height: 1.5; }
+.scene-card p { margin: 0; }
+.eq-text.unit { font-size: 1.05rem; }
+
+/* E：動く点の図。図とグラフを横に並べ、その下につまみ */
+.moving { flex: none; display: flex; flex-direction: column; gap: 4px; }
+.moving-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; }
+.moving-figure, .moving-plot { width: 100%; height: auto; max-height: 30vh; }
+.moving-slider { display: flex; align-items: center; gap: 10px; }
+.moving-slider input { flex: 1; height: 32px; accent-color: var(--accent); }
+.moving-slider span { flex: none; min-width: 5.5em; }
+.moving-note { margin: 0; }
+.mv-shape { fill: none; stroke: var(--ink); stroke-width: 0.12; }
+.mv-path { fill: none; stroke: var(--accent); stroke-width: 0.18; stroke-dasharray: 0.4 0.3; }
+.mv-tri { fill: var(--accent); opacity: 0.22; }
+.mv-name { fill: var(--ink); font-size: 1.1px; font-weight: 700; }
+.mv-side { fill: var(--muted); font-size: 0.9px; }
+.mv-p { fill: var(--accent); }
+.mv-pname { fill: var(--accent); font-size: 1.1px; font-weight: 700; }
+.mv-axis { stroke: var(--ink); stroke-width: 0.8; }
+.mv-tick { fill: var(--muted); font-size: 7px; }
+.mv-label { fill: var(--ink); font-size: 8px; font-weight: 700; }
+.mv-dot { fill: var(--primary); }
+.mv-dot.now { fill: var(--accent); }
+.mv-curve { fill: none; stroke: var(--primary); stroke-width: 0.8; opacity: 0.5; }
+
+/* 2つの数で答える（2秒後・3秒後など）と、動く点のヒントの表 */
+.equation.pair { gap: 12px; }
+.pair-item { display: inline-flex; align-items: flex-end; gap: 4px; }
+.hint-table th { font-size: 0.75rem; white-space: nowrap; }
+.hint-table td.filled { background: var(--hint-bg); }
+
+/* 動く点の問題は、図・グラフ・つまみ・表・答えの欄を画面の高さに収めるため、少し小さくする */
+.moving-figure, .moving-plot { max-height: 21vh; }
+.moving .moving-slider input { height: 28px; }
+.hint-table th, .hint-table td { padding: 1px 6px; font-size: 0.95rem; }
+.work:has(.moving) .scene-card { font-size: 0.84rem; line-height: 1.4; padding: 4px 8px; }
+.work:has(.moving) .hint-found { font-size: 0.85rem; }
+@media (max-height: 640px) {
+  .moving-figure, .moving-plot { max-height: 15.5vh; }
+  .hint-table th, .hint-table td { padding: 0 6px; font-size: 0.88rem; }
+  .moving-note { font-size: 0.75rem; }
+}
+.mv-hidden { fill: var(--muted); font-size: 7px; }
+.moving-slider .moving-note { min-width: 7.5em; }
+.hint-table-found { margin: 2px 0 0; font-size: 0.8rem; color: var(--ink); text-align: center; }
+
+/* 動く点：図とグラフは、残りの高さに合わせて縮む（博士の吹き出しが長い段でも、つまみと答えの欄が見えるように） */
+.screen.fit .work:has(.moving) { overflow: hidden; }
+.screen.fit .work .moving { flex: 1 1 auto; min-height: 0; }
+.screen.fit .work .moving-row { flex: 1 1 auto; min-height: 56px; height: 100%; max-height: 30vh; }
+.screen.fit .work .moving-figure, .screen.fit .work .moving-plot { height: 100%; max-height: none; }
+.screen.fit .work .moving-slider { flex: none; }
+@media (max-height: 640px) {
+  .screen.fit .work .moving-row { min-height: 30px; }
+}

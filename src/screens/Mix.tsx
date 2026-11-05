@@ -12,16 +12,21 @@ import { addLater, addLog, load } from '../lib/storage';
 import Solve from './dungeon/Solve';
 import Problem from './practice/Problem';
 import type { ProblemData } from './practice/Problem';
+import { TASK_CONTENT, taskProblems } from '../lib/task';
+import type { TaskEntryId, TaskProblem as TaskProblemData } from '../lib/task';
+import TaskProblem from './task/TaskProblem';
 
 const M = home.mix;
 
-type Item = { entry: 'practice'; p: ProblemData } | { entry: 'dungeon'; p: DungeonProblem };
+type Item = { entry: 'practice'; p: ProblemData } | { entry: 'dungeon'; p: DungeonProblem } | { entry: TaskEntryId; p: TaskProblemData };
 const ALL: Item[] = [
   ...(practice.problems as ProblemData[]).map((p): Item => ({ entry: 'practice', p })),
   ...(dungeon.problems as DungeonProblem[]).map((p): Item => ({ entry: 'dungeon', p })),
+  ...(Object.keys(TASK_CONTENT) as TaskEntryId[]).flatMap((e) => taskProblems(e).map((p): Item => ({ entry: e, p }))),
 ];
-/** 「同じ種類」：傾きと切片を読むは3方向のどれか、2点から式を作るは1種類 */
-export const kindOf = (it: Item) => (it.entry === 'practice' ? `practice:${it.p.type}` : 'dungeon');
+/** 「同じ種類」：傾きと切片を読むは3方向のどれか、2点から式を作るは1種類、新しい入口は最初の型のタグ */
+export const kindOf = (it: Item) =>
+  it.entry === 'practice' ? `practice:${it.p.type}` : it.entry === 'dungeon' ? 'dungeon' : `${it.entry}:${it.p.types[0]}`;
 const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 /** 解いたことのある入口 */
@@ -34,10 +39,10 @@ export function makeQueue(entries: string[], count: number): Item[] {
   while (pool.length && queue.length < count) {
     // 問題が足りないときは、もう一度出してよい
     const fresh = pool.filter((it) => !queue.includes(it));
-    const unused = fresh.length ? fresh : pool;
     const last = queue[queue.length - 1];
-    const differ = unused.filter((it) => !last || kindOf(it) !== kindOf(last));
-    const candidates = differ.length ? differ : unused;
+    const differs = (xs: Item[]) => xs.filter((it) => !last || kindOf(it) !== kindOf(last));
+    // まだ出していない問題で、前と違う種類 → 出した問題も含めて前と違う種類 → まだ出していない問題 の順に探す
+    const candidates = [differs(fresh), differs(pool), fresh, pool].find((xs) => xs.length)!;
     const entry = pick([...new Set(candidates.map((it) => it.entry))]);
     queue.push(pick(candidates.filter((it) => it.entry === entry)));
   }
@@ -67,7 +72,7 @@ export default function Mix({ onExit }: { onExit: () => void }) {
 
   const record = (it: Item, r: { correct: boolean; ms: number; hint: boolean; attempts: number; shown: boolean }) => {
     addLog({ part: it.entry, step: `ミックス ${it.p.id}`, attempts: r.attempts, shown: r.shown, hintsUsed: r.hint ? 1 : 0, ms: r.ms });
-    setGained(addResult({ entry: it.entry, problemId: it.p.id, level: it.p.level, types: it.p.types, correct: r.correct, ms: r.ms, hint: r.hint, mix: true }));
+    setGained(addResult({ entry: it.entry, problemId: it.p.id, level: it.p.level, types: it.p.types, correct: r.correct, ms: r.ms, hint: r.hint, mix: true, targetSec: 'targetSec' in it.p ? it.p.targetSec : undefined }));
     setPos(pos + 1);
   };
 
@@ -76,6 +81,17 @@ export default function Mix({ onExit }: { onExit: () => void }) {
   if (pos >= queue.length) return talk(M.end, home.back, onExit);
 
   const it = queue[pos];
+  if (it.entry !== 'practice' && it.entry !== 'dungeon') {
+    const t = it;
+    return frame(
+      <TaskProblem
+        key={pos}
+        problem={t.p}
+        onFinish={(r) => record(t, { correct: !r.shown, ms: r.ms, hint: r.hintsUsed > 0, attempts: r.attempts, shown: r.shown })}
+        onLater={() => addLater({ part: t.entry, problemId: t.p.id, from: 'solving' })}
+      />,
+    );
+  }
   if (it.entry === 'practice') {
     return frame(
       <Problem

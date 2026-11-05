@@ -3,6 +3,8 @@ import dungeon from '../content/dungeon.json';
 import practice from '../content/practice.json';
 import { isFast, masterState, recentStats, titleState } from './results';
 import type { ProblemResult } from './results';
+import { taskProblems } from './task';
+import type { TaskEntryId } from './task';
 
 let t = 0;
 const r = (extra: Partial<ProblemResult>): ProblemResult => ({
@@ -30,20 +32,31 @@ describe('称号（5.10）', () => {
     expect(titleState(many(14), 'practice').complete).toBe(false);
     expect(titleState(many(15, { ms: 30_000 }), 'practice').complete).toBe(false);
   });
-  it('一次関数マスター：すべての入口がそろい、すべての問題を一度は自力で正解', () => {
-    const all = [
-      ...practice.problems.map((p) => r({ problemId: p.id })),
-      // 傾きと切片を読むは9問なので、達人（15問）には繰り返して解く
-      ...many(6, { problemId: practice.problems[1].id }),
-      ...dungeon.problems.map((p) => r({ entry: 'dungeon', level: '標準', problemId: p.id })),
+  it('挑戦：解いた数の称号だけ（スピードはない）', () => {
+    const s = titleState(many(15, { entry: 'challenge', level: '発展' }), 'challenge');
+    expect([s.hasSpeed, s.speedGot, s.complete]).toEqual([false, false, true]);
+  });
+  it('一次関数クリア：挑戦以外がそろい、挑戦以外の問題をすべて自力で正解。マスター：さらに挑戦の問題もすべて', () => {
+    const entries = [
+      { entry: 'practice', level: '基本', ids: practice.problems.map((p) => p.id) },
+      { entry: 'dungeon', level: '標準', ids: dungeon.problems.map((p) => p.id) },
+      ...(['points', 'figures', 'life'] as TaskEntryId[]).map((e) => ({ entry: e, level: taskProblems(e)[0].level, ids: taskProblems(e).map((p) => p.id) })),
     ];
-    expect(masterState([])).toMatchObject({ done: 0, total: 2, unsolved: 39, master: false });
-    // 傾きと切片を読むはそろったが、2点から式を作るは30問中15問しか正解していない
-    const half = [...practice.problems.map((p) => r({ problemId: p.id })), ...many(6), ...dungeon.problems.slice(0, 15).map((p) => r({ entry: 'dungeon', level: '標準', problemId: p.id }))];
-    expect(masterState(half)).toMatchObject({ done: 2, unsolved: 15, master: false });
-    expect(masterState(all)).toMatchObject({ done: 2, unsolved: 0, master: true });
+    const total = entries.reduce((n, e) => n + e.ids.length, 0);
+    // 入口ごとに、すべての問題を1回ずつ正解し、15問に足りない分は最後の問題を繰り返す
+    const solveAll = (e: (typeof entries)[number]) =>
+      [...e.ids, ...Array(Math.max(0, 15 - e.ids.length)).fill(e.ids[e.ids.length - 1])].map((id) => r({ entry: e.entry, level: e.level, problemId: id }));
+    const normal = entries.flatMap(solveAll);
+    const challengeIds = taskProblems('challenge').map((p) => p.id);
+    expect(masterState([])).toMatchObject({ done: 0, total: 5, unsolved: total, clear: false, challengeUnsolved: 4, master: false });
+    expect(masterState(normal)).toMatchObject({ done: 5, unsolved: 0, clear: true, challengeUnsolved: 4, master: false });
+    const withChallenge = [...normal, ...challengeIds.map((id) => r({ entry: 'challenge', level: '発展', problemId: id, ms: 999_000 }))];
+    expect(masterState(withChallenge)).toMatchObject({ clear: true, challengeUnsolved: 0, master: true });
+    // 挑戦を全部解いても、クリアしていなければマスターではない
+    expect(masterState(withChallenge.filter((x) => x.entry !== 'dungeon')).master).toBe(false);
     // 解き方を見せた問題は「自力で正解」に数えない
-    expect(masterState([...all.slice(1), r({ problemId: practice.problems[0].id, correct: false })]).unsolved).toBe(1);
+    const first = normal.findIndex((x) => x.problemId === practice.problems[0].id);
+    expect(masterState([...normal.slice(0, first), ...normal.slice(first + 1), r({ problemId: practice.problems[0].id, correct: false })]).unsolved).toBe(1);
   });
 });
 
@@ -59,6 +72,7 @@ describe('講師用画面：直近の問題の系統別タイム（5.12）', () 
     expect(rows.find((x) => x.key === 'グラフから関数を決定')).toMatchObject({ count: 3, hinted: 1, correct: 2, avgMs: 20_000 });
     expect(rows.find((x) => x.key === '座標と図形')).toMatchObject({ count: 1, correct: 0, avgMs: null });
     expect(rows.map((x) => x.key)).toHaveLength(7);
+    expect(recentStats(results, 0, 'entry').map((x) => x.key)).toContain('challenge');
   });
   it('直近 n 問だけ。入口別にも分けられる', () => {
     expect(recentStats(results, 2, 'type').find((x) => x.key === 'グラフから関数を決定')!.count).toBe(1);

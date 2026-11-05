@@ -20,10 +20,21 @@
   "gained": "「{entry}」の称号「{title}」を手に入れた！",
   "gainedMaster": "「{title}」になった！",
   "master": "一次関数マスター",
-  "masterHeading": "一次関数マスター",
-  "masterCond": "すべての入口で「{top}」と「スピード」がそろい、すべての問題を一度は自力で正解すると、一次関数マスター",
+  "masterCond": "挑戦のすべての問題を一度は自力で正解すると、一次関数マスター",
   "masterEntries": "そろった入口：{done} / {total}",
-  "masterUnsolved": "まだ自力で正解していない問題：{n}問",
+  "masterUnsolved": "挑戦で、まだ自力で正解していない問題：{n}問",
   "masterGot": "一次関数マスター！",
-  "entryComplete": "そろった"
+  "entryComplete": "そろった",
+  "clear": "一次関数クリア",
+  "gainedClear": [
+    "一次関数クリア！",
+    "挑戦の問題も解けたら、一次関数マスターだよ。"
+  ],
+  "gainedClearAndMaster": [
+    "一次関数クリア！",
+    "挑戦の問題も解けているから、一次関数マスターだよ！"
+  ],
+  "clearCond": "挑戦以外のすべての入口で「{top}」と「スピード」がそろい、挑戦以外のすべての問題を一度は自力で正解すると、一次関数クリア",
+  "clearGot": "一次関数クリア！",
+  "clearUnsolved": "まだ自力で正解していない問題：{n}問"
 }

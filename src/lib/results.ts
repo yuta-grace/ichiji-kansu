@@ -1,6 +1,10 @@
-// 問題ごとの結果：称号（解いた数・スピード・一次関数マスター）と、講師用画面の系統別タイムに使う（5.10・5.12）
+// 問題ごとの結果：称号（解いた数・スピード・一次関数クリア・一次関数マスター）と、講師用画面の系統別タイムに使う（5.10・5.12）
+import challenge from '../content/challenge.json';
 import dungeon from '../content/dungeon.json';
 import home from '../content/home.json';
+import figures from '../content/figures.json';
+import life from '../content/life.json';
+import points from '../content/points.json';
 import practice from '../content/practice.json';
 import settings from '../content/settings.json';
 import titles from '../content/titles.json';
@@ -30,19 +34,28 @@ export interface ProblemResult {
   targetSec?: number;
 }
 
-/** 「問題を解く」の入口（区分のラベルがあるもの） */
-export const SOLVE_ENTRIES = home.groups.flatMap((g) => g.items).filter((i): i is typeof i & { level: string } => 'level' in i);
-export const entryLabel = (id: string) => SOLVE_ENTRIES.find((e) => e.id === id)?.label ?? id;
+/** 学ぶの一覧の入口（名前と区分） */
+const ALL_ENTRIES = home.groups.flatMap((g) => g.items) as { id: string; label: string; level?: string }[];
+export const entryLabel = (id: string) => ALL_ENTRIES.find((e) => e.id === id)?.label ?? id;
 /** 問題の型（講師用画面の「型別」の並び） */
 export const TYPES: string[] = settings.types;
 
-/** 入口ごとの問題（一次関数マスターの「すべての問題」）。新しい入口を作ったらここに足す */
+/** 挑戦：スピードの称号はなく、一次関数クリアには数えない（一次関数マスターの条件） */
+export const CHALLENGE = 'challenge';
+
+/** 入口ごとの問題（一次関数クリア・マスターの「すべての問題」）。新しい入口を作ったらここに足す */
 const ENTRY_PROBLEMS: Record<string, string[]> = {
   practice: practice.problems.map((p) => p.id),
   dungeon: dungeon.problems.map((p) => p.id),
+  points: points.problems.map((p) => p.id),
+  figures: figures.problems.map((p) => p.id),
+  life: life.problems.map((p) => p.id),
+  [CHALLENGE]: challenge.problems.map((p) => p.id),
 };
-/** 称号と一次関数マスターに数える入口：問題がある入口（まだ作っていない入口は数えない） */
-export const TITLE_ENTRIES = SOLVE_ENTRIES.filter((e) => ENTRY_PROBLEMS[e.id]?.length);
+/** 称号に数える入口：問題がある入口（学ぶの一覧の順） */
+export const TITLE_ENTRIES = ALL_ENTRIES.filter((e) => ENTRY_PROBLEMS[e.id]?.length);
+/** 講師用画面の「入口別」の並び */
+export const STAT_ENTRIES = TITLE_ENTRIES;
 
 /** 時間の表示：「42秒」「1分05秒」「3分」 */
 export function formatTime(ms: number) {
@@ -61,6 +74,8 @@ export interface TitleState {
   steps: { n: number; name: string; got: boolean }[];
   speed: number;
   speedGot: boolean;
+  /** スピードの称号があるか（挑戦にはない） */
+  hasSpeed: boolean;
   /** 解いた数の最後の段階とスピードがそろった */
   complete: boolean;
 }
@@ -70,26 +85,33 @@ export function titleState(results: ProblemResult[], entry: string): TitleState 
   const solved = mine.filter((r) => r.correct).length;
   const steps = T.solvedSteps.map((n, i) => ({ n, name: titles.solved[i], got: solved >= n }));
   const speed = mine.filter(isFast).length;
-  const speedGot = speed >= T.speedCount;
-  return { solved, steps, speed, speedGot, complete: steps[steps.length - 1].got && speedGot };
+  const hasSpeed = entry !== CHALLENGE;
+  const speedGot = hasSpeed && speed >= T.speedCount;
+  return { solved, steps, speed, speedGot, hasSpeed, complete: steps[steps.length - 1].got && (speedGot || !hasSpeed) };
 }
 
 export interface MasterState {
-  /** そろった入口の数 */
+  /** 一次関数クリア：挑戦以外の入口で、そろった入口の数 */
   done: number;
   total: number;
-  /** まだ自力で正解していない問題の数（すべての入口の合計） */
+  /** 挑戦以外で、まだ自力で正解していない問題の数 */
   unsolved: number;
+  clear: boolean;
+  /** 挑戦で、まだ自力で正解していない問題の数 */
+  challengeUnsolved: number;
+  /** 一次関数マスター：クリアして、挑戦のすべての問題を一度は自力で正解 */
   master: boolean;
 }
 
-/** 一次関数マスター：すべての入口がそろい、すべての問題を一度は自力で正解している */
 export function masterState(results: ProblemResult[]): MasterState {
   const solvedIds = new Set(results.filter((r) => r.correct).map((r) => `${r.entry}/${r.problemId}`));
-  const done = TITLE_ENTRIES.filter((e) => titleState(results, e.id).complete).length;
-  const unsolved = TITLE_ENTRIES.reduce((n, e) => n + ENTRY_PROBLEMS[e.id].filter((id) => !solvedIds.has(`${e.id}/${id}`)).length, 0);
-  const total = TITLE_ENTRIES.length;
-  return { done, total, unsolved, master: done === total && unsolved === 0 };
+  const unsolvedIn = (id: string) => ENTRY_PROBLEMS[id].filter((p) => !solvedIds.has(`${id}/${p}`)).length;
+  const normal = TITLE_ENTRIES.filter((e) => e.id !== CHALLENGE);
+  const done = normal.filter((e) => titleState(results, e.id).complete).length;
+  const unsolved = normal.reduce((n, e) => n + unsolvedIn(e.id), 0);
+  const clear = done === normal.length && unsolved === 0;
+  const challengeUnsolved = unsolvedIn(CHALLENGE);
+  return { done, total: normal.length, unsolved, clear, challengeUnsolved, master: clear && challengeUnsolved === 0 };
 }
 
 /** 新しく手に入れた称号を、博士の台詞にして返す */
@@ -99,7 +121,11 @@ function gainedLines(prev: ProblemResult[], next: ProblemResult[], entry: string
   const after = titleState(next, entry);
   const lines = after.steps.filter((s, i) => s.got && !before.steps[i].got).map((s) => fill(titles.gained, { entry: label, title: s.name }));
   if (after.speedGot && !before.speedGot) lines.push(fill(titles.gained, { entry: label, title: titles.speed }));
-  if (masterState(next).master && !masterState(prev).master) lines.push(fill(titles.gainedMaster, { title: titles.master }));
+  const m0 = masterState(prev);
+  const m1 = masterState(next);
+  // クリアのときは、次の目標（挑戦）を軽く伝える
+  if (m1.clear && !m0.clear) lines.push(...(m1.master ? titles.gainedClearAndMaster : titles.gainedClear));
+  else if (m1.master && !m0.master) lines.push(fill(titles.gainedMaster, { title: titles.master }));
   return lines;
 }
 
@@ -132,7 +158,7 @@ export interface StatRow {
 /** 直近 n 問（0 は全部）を、型別か入口別に分けて集計する。型が複数ある問題は、それぞれの型に数える */
 export function recentStats(results: ProblemResult[], n: number, by: 'type' | 'entry'): StatRow[] {
   const recent = [...results].sort((a, b) => a.at - b.at).slice(n > 0 ? -n : 0);
-  const keys = by === 'type' ? TYPES : SOLVE_ENTRIES.map((e) => e.id);
+  const keys = by === 'type' ? TYPES : STAT_ENTRIES.map((e) => e.id);
   return keys.map((key) => {
     const rows = recent.filter((r) => (by === 'type' ? (r.types ?? []).includes(key) : r.entry === key));
     const ok = rows.filter((r) => r.correct);

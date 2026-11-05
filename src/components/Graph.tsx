@@ -18,6 +18,14 @@ export interface GraphLine {
   /** 線を引く x の範囲（省略時はグラフ全体） */
   from?: number;
   to?: number;
+  /** 直線の名前（ℓ・m など）。グラフの右の方に出す */
+  name?: string;
+}
+
+/** 薄く塗る図形（座標の上の三角形など） */
+export interface GraphPolygon {
+  pts: Pt[];
+  tone?: Tone;
 }
 
 /** 点 (x, y) から右に dx、上に dy の階段 */
@@ -34,6 +42,9 @@ interface Props extends Range {
   points?: GraphPoint[];
   lines?: GraphLine[];
   stairs?: GraphStair[];
+  polygons?: GraphPolygon[];
+  /** y 軸の目盛りの数を出さない（動く点のグラフで、答える前に面積の数を見せないため） */
+  hideYTicks?: boolean;
   /** 手がかりとして光らせる縦の帯（x の値） */
   highlightX?: number;
   /** 生徒が打つ点。plot モードで使う */
@@ -57,7 +68,7 @@ export default function Graph(props: Props) {
   const {
     xMin, xMax, yMin, yMax,
     xLabel = 'x', yLabel = 'y',
-    points = [], lines = [], stairs = [],
+    points = [], lines = [], stairs = [], polygons = [], hideYTicks = false,
     userPoints = [], onUserPointsChange, maxUserPoints = Infinity,
     mode = 'none', onPick, highlightX,
   } = props;
@@ -181,6 +192,15 @@ export default function Graph(props: Props) {
     return { x1: px(x1), y1: py(l.a * x1 + l.b), x2: px(x2), y2: py(l.a * x2 + l.b) };
   };
 
+  /** 直線の名前を置く場所：グラフの中に見えている部分の、右の端に近いところ */
+  const nameAt = (l: GraphLine): Pt | null => {
+    for (let x = xMax - 0.6; x >= xMin; x -= 0.25) {
+      const y = l.a * x + l.b;
+      if (y > yMin + 0.6 && y < yMax - 0.6) return { x, y };
+    }
+    return null;
+  };
+
   // 座標の表示は点の上。上の端で切れるときは点の下に出す
   const readoutTop = (p: Pt) => (py(p.y) - 44 < 0 ? py(p.y) + 16 : py(p.y) - 44);
   const readout = dragIndex !== null ? userPoints[dragIndex] : selected !== null ? userPoints[selected] : null;
@@ -229,7 +249,7 @@ export default function Graph(props: Props) {
               {String(x).replace('-', '−')}
             </text>
           ))}
-          {ys.filter((y) => y % tickY === 0).map((y) => (
+          {!hideYTicks && ys.filter((y) => y % tickY === 0).map((y) => (
             <text key={`ly${y}`} className="g-tick" x={PAD.l - 6} y={py(y) + 4} textAnchor="end">
               {String(y).replace('-', '−')}
             </text>
@@ -238,9 +258,21 @@ export default function Graph(props: Props) {
           <text className="g-axis-label" x={PAD.l + 6} y={PAD.t + 12}>{yLabel}</text>
 
           <g clipPath="url(#plot-area)">
+            {polygons.map((g, i) => (
+              <polygon key={`g${i}`} className={`g-polygon tone-${g.tone ?? 'main'}`} points={g.pts.map((p) => `${px(p.x)},${py(p.y)}`).join(' ')} />
+            ))}
             {lines.map((l, i) => {
               const e = lineEnds(l);
               return <line key={`l${i}`} className={`g-line tone-${l.tone ?? 'main'}`} {...e} />;
+            })}
+            {lines.map((l, i) => {
+              if (!l.name) return null;
+              const at = nameAt(l);
+              return at ? (
+                <text key={`n${i}`} className="g-line-name" x={px(at.x) + 6} y={py(at.y) - 6}>
+                  {l.name}
+                </text>
+              ) : null;
             })}
             {stairs.map((s, i) => (
               <g key={`s${i}`} className={`g-stair tone-${s.tone ?? 'main'}`}>

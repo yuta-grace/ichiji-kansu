@@ -13,7 +13,7 @@ export interface NoteMethod {
 const KEY = 'ichiji-kansu.v2';
 
 export interface LogEntry {
-  part: 'entry' | 'diagnostic' | 'understanding' | 'practice' | 'dungeon' | 'notebook';
+  part: 'entry' | 'diagnostic' | 'understanding' | 'practice' | 'dungeon' | 'notebook' | 'points' | 'figures' | 'life' | 'challenge';
   step: string;
   /** 正解までにかかった回数（3回目で答えを見せた場合は shown: true） */
   attempts?: number;
@@ -29,7 +29,7 @@ export interface LogEntry {
 export interface LaterItem {
   id: string;
   /** どのパートの問題か（古い記録には無いのでダンジョンとして扱う） */
-  part?: 'dungeon' | 'practice';
+  part?: 'dungeon' | 'practice' | 'points' | 'figures' | 'life' | 'challenge';
   problemId: string;
   /** ダンジョンの解き方。練習では無し（問題単位） */
   method?: MethodId;
@@ -55,6 +55,8 @@ export interface SaveData {
   practice?: { queue: string[]; pos: number; streak: number; done: boolean };
   /** 2点から式を作るの進み具合。pos：次に出す問題（問題集の何番目か）、solved：解いた問題の数、offered1：①を提案したか、seen：正解後に見たことのある解き方 */
   dungeon?: { pos: number; solved?: number; offered1?: boolean; seen?: MethodId[] };
+  /** 新しい入口（交点と直線上の点・座標と図形・暮らしの中の一次関数）の進み具合 */
+  tasks?: Partial<Record<'points' | 'figures' | 'life' | 'challenge', { pos: number; done: boolean }>>;
   /** 解き方ノート：学んだ解き方（学んだ時刻と、生徒が付けた名前） */
   notebook?: Partial<Record<MethodId, NoteMethod>>;
   later: LaterItem[];

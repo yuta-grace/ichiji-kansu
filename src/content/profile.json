@@ -48,7 +48,8 @@
       "eq-graph": "式からグラフ",
       "graph-eq": "グラフから式",
       "table-eq": "表から式"
-    }
+    },
+    "taskNumber": "{n}問目"
   },
   "teacher": {
     "title": "講師用",

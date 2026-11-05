@@ -16,6 +16,10 @@ import { load, openLater } from '../lib/storage';
 import type { LaterItem, SaveData } from '../lib/storage';
 import { fill } from '../lib/text';
 import Walkthrough from './dungeon/Walkthrough';
+import MovingPoint from '../components/MovingPoint';
+import { entryLabel } from '../lib/results';
+import { isTaskEntry, num, taskProblems } from '../lib/task';
+import type { TaskProblem } from '../lib/task';
 
 const T = content.later;
 type PracticeProblem = { id: string; type: string; a: string; b: string; xs?: number[] };
@@ -24,6 +28,10 @@ const practiceById = (id: string) => (practice.problems as PracticeProblem[]).fi
 
 /** 一覧・講師用画面に出す見出し（問題と、あれば解き方）。d は、その生徒の記録（解き方の名前に使う） */
 export function laterLabel(it: LaterItem, d: SaveData = load()): { title: string; sub: string } {
+  if (it.part && isTaskEntry(it.part)) {
+    const i = taskProblems(it.part).findIndex((p) => p.id === it.problemId);
+    return { title: `${entryLabel(it.part)}：${fill(T.taskNumber, { n: i + 1 })}`, sub: T.fromSolving };
+  }
   if (it.part === 'practice') {
     const p = practiceById(it.problemId);
     const title = p ? (p.type === 'eq-graph' ? eqText(linear(p.a, p.b)).replace(/\[|\]/g, '') : T.typeLabel[p.type as keyof typeof T.typeLabel]) : it.problemId;
@@ -74,11 +82,62 @@ function PracticeView({ problem, onDone }: { problem: PracticeProblem; onDone: (
   );
 }
 
+/** 新しい入口の問題を、問題を出したまま解き方を1つずつ見せる */
+function TaskView({ problem, onDone }: { problem: TaskProblem; onDone: () => void }) {
+  const steps = problem.solution;
+  const [i, setI] = useState(0);
+  const g = problem.graph;
+  return (
+    <div className="step">
+      <Hakase lines={i === 0 ? [...T.practiceViewIntro, steps[0]] : [steps[i]]} />
+      <div className="work">
+        <div className="scene-card">
+          {[...(problem.card ?? []), ...problem.prompt].map((t, k) => (
+            <p key={k}>
+              <MathText text={t} />
+            </p>
+          ))}
+        </div>
+        <div className="hint-found">
+          {steps.slice(0, i + 1).map((t, k) => (
+            <span key={k}>
+              <MathText text={t} />
+            </span>
+          ))}
+        </div>
+        {problem.table && <ValueTable xLabel={problem.table.xLabel} yLabel={problem.table.yLabel} xs={problem.table.xs} ys={problem.table.ys.map(String)} />}
+        {problem.figure && <MovingPoint figure={problem.figure} revealed />}
+        {g && (
+          <Graph
+            xMin={g.xMin}
+            xMax={g.xMax}
+            yMin={g.yMin}
+            yMax={g.yMax}
+            equalScale
+            lines={(g.lines ?? []).map((l) => ({ a: num(l.a), b: num(l.b), name: l.name }))}
+            polygons={g.polygon ? [{ pts: g.polygon.map(([x, y]) => ({ x, y })) }] : []}
+            points={(g.points ?? []).map((p) => ({ x: p.x, y: p.y, label: p.label, tone: 'faint' as const }))}
+          />
+        )}
+      </div>
+      <div className="actions">
+        <button type="button" className="btn primary" onClick={() => (i >= steps.length - 1 ? onDone() : setI(i + 1))}>
+          {dungeon.lines.next}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 「あとで聞く」の1件を見る */
 export function LaterView({ item, onDone }: { item: LaterItem; onDone: () => void }) {
   if (item.part === 'practice') {
     const p = practiceById(item.problemId);
     return p ? <PracticeView problem={p} onDone={onDone} /> : null;
+  }
+  if (item.part && isTaskEntry(item.part)) {
+    const p = taskProblems(item.part).find((x) => x.id === item.problemId);
+    return p ? <TaskView problem={p} onDone={onDone} /> : null;
   }
   const problem = dungeonById(item.problemId);
   if (!problem) return null;
