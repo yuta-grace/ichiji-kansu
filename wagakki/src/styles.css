@@ -1008,9 +1008,6 @@ input[type='range'] {
   position: relative;
   border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
 }
-.row.editing {
-  background: color-mix(in srgb, var(--primary) 7%, transparent);
-}
 .bunka-lines {
   position: absolute;
   inset: 0;
@@ -1111,6 +1108,120 @@ input[type='range'] {
   bottom: 2px;
   font-size: 9px;
   transform: translateX(-50%);
+}
+
+/* 縦譜（尺八）：右の行から左へ。行の中は上から下へ */
+.score.vertical {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 18px;
+  width: max-content;
+  min-width: 100%;
+  padding: 8px 12px 12px;
+}
+.vsystem {
+  display: flex;
+  flex-direction: row-reverse;
+  flex-shrink: 0;
+}
+.vnums {
+  width: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.vnum {
+  font-size: 10px;
+  color: var(--on-surface-variant);
+  text-align: center;
+  padding-top: 2px;
+}
+.vcol {
+  width: 50px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.vcol.muted {
+  opacity: 0.45;
+}
+.vhead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding-bottom: 4px;
+  font-size: 11px;
+  overflow: hidden;
+}
+.vhead-text {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-height: 0;
+}
+.vcol.editing .vhead {
+  font-weight: 700;
+}
+.vmeasure {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ink);
+}
+.vmeasure:last-child {
+  border-bottom: 1px solid var(--ink);
+}
+.vertical .beat {
+  flex-direction: column;
+  width: 100%;
+}
+.vertical .slot {
+  width: 100%;
+  min-height: 0;
+}
+.vertical .mark {
+  writing-mode: vertical-rl;
+}
+/* フォントの文字は英字に割り当てられているので、縦書きでも回さない */
+.vertical .mark.kin {
+  writing-mode: horizontal-tb;
+}
+.vertical .kinko-glyph {
+  writing-mode: horizontal-tb;
+}
+.vertical .kinko {
+  flex-direction: column;
+}
+.vertical .mark.kin .kinko-kana {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: -0.05em;
+}
+.vertical .kinko-reg {
+  align-self: center;
+  writing-mode: horizontal-tb;
+}
+.vertical .mark.rest,
+.vertical .mark.ext {
+  font-size: 13px;
+}
+.vertical .beat-bar {
+  left: auto;
+  right: 3px;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  height: auto;
+}
+.vertical .beat-bar.bars2 {
+  box-shadow: -4px 0 0 var(--ink);
+}
+.vertical .triplet {
+  left: auto;
+  right: 4px;
+  bottom: 50%;
+  transform: translateY(50%);
 }
 
 .input-dock {
@@ -1269,11 +1380,13 @@ input[type='range'] {
     border: 0;
     padding: 0;
   }
-  .score.print .row.editing {
-    background: none;
-  }
-  .system {
+  .system,
+  .vsystem {
     break-inside: avoid;
+  }
+  .score.vertical.print {
+    flex-wrap: wrap-reverse;
+    width: auto;
   }
   .slot:hover {
     background: none;

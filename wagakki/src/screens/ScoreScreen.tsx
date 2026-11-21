@@ -46,10 +46,29 @@ export function ScoreScreen() {
   const edit = song.parts[editIdx] ?? song.parts[0];
 
   // 自動保存
+  const latest = useRef(song);
+  const dirty = useRef(false);
   useEffect(() => {
-    const t = window.setTimeout(() => saveSong(song), 400);
+    latest.current = song;
+    dirty.current = true;
+    const t = window.setTimeout(() => {
+      saveSong(song);
+      dirty.current = false;
+    }, 400);
     return () => clearTimeout(t);
   }, [song]);
+  // 画面を切り替えたり閉じたりしたときも、保存していない変更を残す
+  useEffect(() => {
+    const flush = () => {
+      if (dirty.current) saveSong(latest.current);
+      dirty.current = false;
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
 
   useEffect(() => () => player.current.stop(), []);
 
