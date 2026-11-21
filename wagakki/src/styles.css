@@ -674,18 +674,27 @@ input[type='range'] {
   background: var(--wood-line);
   pointer-events: none;
 }
+.neck-cell.str0 {
+  --string-w: 4.5px; /* 一の糸がいちばん太い */
+}
+.neck-cell.str1 {
+  --string-w: 3px;
+}
+.neck-cell.str2 {
+  --string-w: 1.5px;
+}
 .neck.vertical .string-line {
   top: -2px;
   bottom: -2px;
   left: 50%;
-  width: 2px;
+  width: var(--string-w);
   transform: translateX(-50%);
 }
 .neck.horizontal .string-line {
   left: -2px;
   right: -2px;
   top: 50%;
-  height: 2px;
+  height: var(--string-w);
   transform: translateY(-50%);
 }
 .neck-cell .dot {

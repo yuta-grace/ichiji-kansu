@@ -73,7 +73,7 @@ export function ShamisenNeck({
               <button
                 key={`${s}-${p}`}
                 type="button"
-                className={`neck-cell${lit ? ' lit' : ''}${isPressed ? ' pressed' : ''}${p === 0 ? ' open' : ''}`}
+                className={`neck-cell str${s}${lit ? ' lit' : ''}${isPressed ? ' pressed' : ''}${p === 0 ? ' open' : ''}`}
                 style={at(s, p)}
                 onPointerDown={(e) => {
                   e.preventDefault();
