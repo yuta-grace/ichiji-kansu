@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:page": "tsc --noEmit && vite build -c vite.page.config.ts && node tools/inline-page.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

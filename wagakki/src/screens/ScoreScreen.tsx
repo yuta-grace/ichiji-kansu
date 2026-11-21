@@ -27,6 +27,9 @@ import {
 import { currentSongId, deleteSong, loadSongs, saveSong } from '../lib/storage';
 import { PART_COLORS, ScoreView, type Cursor } from './ScoreView';
 
+/** claude.ai の非公開ページとして動いているか（ファイル保存・印刷ができない） */
+const ON_CLAUDE_PAGE = import.meta.env.VITE_CLAUDE_PAGE === '1';
+
 function initialSong(): Song {
   const id = currentSongId();
   const songs = loadSongs();
@@ -358,6 +361,8 @@ function PartDialog({
   onDelete: () => void;
 }) {
   const [keep, setKeep] = useState(true);
+  const [armed, setArmed] = useState(false);
+  useEffect(() => setArmed(false), [open, part?.id]);
   if (!part) return null;
   return (
     <Dialog open={open} title="パートの設定" onClose={onClose} actions={<Button onClick={onClose}>閉じる</Button>}>
@@ -393,14 +398,8 @@ function PartDialog({
       <Switch label="消音" checked={part.muted} onChange={(v) => onChange((p) => ({ ...p, muted: v }))} />
       {canDelete && (
         <div className="danger-zone">
-          <Button
-            variant="outlined"
-            icon="delete"
-            onClick={() => {
-              if (confirm(`「${part.name}」を削除しますか？`)) onDelete();
-            }}
-          >
-            このパートを削除
+          <Button variant={armed ? 'filled' : 'outlined'} icon="delete" onClick={() => (armed ? onDelete() : setArmed(true))}>
+            {armed ? `もう一度押すと「${part.name}」を削除` : 'このパートを削除'}
           </Button>
         </div>
       )}
@@ -533,10 +532,37 @@ function FilesDialog({
   toast: (m: string) => void;
 }) {
   const [list, setList] = useState<Song[]>([]);
+  const [armedId, setArmedId] = useState<string | null>(null);
+  const [pasted, setPasted] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) setList(loadSongs());
+    setArmedId(null);
   }, [open]);
+
+  const importText = (text: string) => {
+    try {
+      const s = parseSong(JSON.parse(text));
+      if (loadSongs().some((x) => x.id === s.id)) s.id = Math.random().toString(36).slice(2);
+      saveSong(s);
+      onOpen(s);
+      toast(`「${s.title}」を読み込みました`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '読み込めませんでした');
+    }
+  };
+
+  // claude.ai のページではファイルを保存できないので、楽譜の文字をコピーする
+  const copyText = async () => {
+    const text = JSON.stringify(song);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('楽譜をコピーしました。メモなどに貼り付けて残せます');
+    } catch {
+      setPasted(text);
+      toast('コピーできなかったので、下の欄の文字を選んでコピーしてください');
+    }
+  };
 
   const exportFile = () => {
     const blob = new Blob([JSON.stringify(song, null, 1)], { type: 'application/json' });
@@ -560,22 +586,30 @@ function FilesDialog({
         >
           新しい曲
         </Button>
-        <Button icon="download" variant="tonal" onClick={exportFile}>
-          ファイルに書き出し
-        </Button>
+        {ON_CLAUDE_PAGE ? (
+          <Button icon="download" variant="tonal" onClick={copyText}>
+            楽譜をコピー
+          </Button>
+        ) : (
+          <Button icon="download" variant="tonal" onClick={exportFile}>
+            ファイルに書き出し
+          </Button>
+        )}
         <Button icon="upload" variant="tonal" onClick={() => fileRef.current?.click()}>
           ファイルから読み込み
         </Button>
-        <Button
-          icon="print"
-          variant="tonal"
-          onClick={() => {
-            onClose();
-            setTimeout(() => window.print(), 150);
-          }}
-        >
-          印刷・PDF
-        </Button>
+        {!ON_CLAUDE_PAGE && (
+          <Button
+            icon="print"
+            variant="tonal"
+            onClick={() => {
+              onClose();
+              setTimeout(() => window.print(), 150);
+            }}
+          >
+            印刷・PDF
+          </Button>
+        )}
         <input
           ref={fileRef}
           type="file"
@@ -585,18 +619,21 @@ function FilesDialog({
             const f = e.target.files?.[0];
             e.target.value = '';
             if (!f) return;
-            try {
-              const s = parseSong(JSON.parse(await f.text()));
-              if (loadSongs().some((x) => x.id === s.id)) s.id = Math.random().toString(36).slice(2);
-              saveSong(s);
-              onOpen(s);
-              toast(`「${s.title}」を読み込みました`);
-            } catch (err) {
-              toast(err instanceof Error ? err.message : '読み込めませんでした');
-            }
+            importText(await f.text());
           }}
         />
       </div>
+      {ON_CLAUDE_PAGE && (
+        <label className="field">
+          <span className="field-label">コピーした楽譜の文字を貼り付けて読み込む</span>
+          <textarea id="paste-score" rows={3} value={pasted} onChange={(e) => setPasted(e.target.value)} />
+          <span>
+            <Button variant="outlined" disabled={!pasted.trim()} onClick={() => importText(pasted)}>
+              貼り付けた楽譜を読み込む
+            </Button>
+          </span>
+        </label>
+      )}
       <h3 className="list-title">保存した曲（自動で保存されます）</h3>
       <ul className="song-list">
         {list.map((s) => (
@@ -608,16 +645,20 @@ function FilesDialog({
               </span>
             </button>
             {s.id !== song.id && (
-              <IconButton
-                icon="delete"
-                label={`「${s.title}」を削除`}
-                onClick={() => {
-                  if (confirm(`「${s.title}」を削除しますか？`)) {
+              armedId === s.id ? (
+                <Button
+                  variant="filled"
+                  onClick={() => {
                     deleteSong(s.id);
                     setList(loadSongs());
-                  }
-                }}
-              />
+                    setArmedId(null);
+                  }}
+                >
+                  削除する
+                </Button>
+              ) : (
+                <IconButton icon="delete" label={`「${s.title}」を削除`} onClick={() => setArmedId(s.id)} />
+              )
             )}
           </li>
         ))}
