@@ -54,7 +54,9 @@ export function Piano({
   const handlers = (m: number) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
-      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      const el = e.target as HTMLElement;
+      // タッチは押した要素に捕まるので外す（指を滑らせたら離したことにするため）
+      if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
       onDown(m, e.pointerId);
     },
     onPointerUp: (e: React.PointerEvent) => onUp(e.pointerId),

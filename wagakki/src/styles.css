@@ -596,7 +596,7 @@ input[type='range'] {
 }
 .neck.horizontal .neck-grid {
   gap: 6px 2px;
-  min-width: 1200px;
+  min-width: 1048px;
 }
 .neck-head {
   display: flex;
@@ -616,8 +616,41 @@ input[type='range'] {
 .neck-rowlabel {
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--on-surface-variant);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
+}
+.neck-rowlabel span {
+  background: var(--wood);
+  padding: 0 4px;
+}
+.neck-rowlabel.common {
+  color: var(--on-surface);
+  font-weight: 700;
+}
+/* よく使う勘所：数字から糸の点まで薄い点線 */
+.neck-guide {
+  position: relative;
+  pointer-events: none;
+}
+.neck-guide::before {
+  content: '';
+  position: absolute;
+  opacity: 0.45;
+}
+.neck.vertical .neck-guide::before {
+  left: 20px;
+  right: 8%;
+  top: 50%;
+  border-top: 1.5px dotted var(--on-surface-variant);
+}
+.neck.horizontal .neck-guide::before {
+  top: 14px;
+  bottom: 8%;
+  left: 50%;
+  border-left: 1.5px dotted var(--on-surface-variant);
 }
 .neck-cell {
   position: relative;
@@ -628,10 +661,13 @@ input[type='range'] {
   display: grid;
   place-items: center;
   touch-action: manipulation;
-  transition: background 0.15s;
+  padding: 0;
 }
 .neck.horizontal .neck-cell {
-  height: 52px;
+  height: 48px;
+}
+.neck-cell:hover {
+  background: color-mix(in srgb, var(--on-surface) 6%, transparent);
 }
 .neck-cell .string-line {
   position: absolute;
@@ -652,37 +688,27 @@ input[type='range'] {
   height: 2px;
   transform: translateY(-50%);
 }
-.neck-cell .pos-label {
+.neck-cell .dot {
   position: relative;
-  min-width: 36px;
-  height: 28px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: var(--sc-lowest);
-  border: 1px solid var(--outline-variant);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--on-surface);
+  transition: transform 0.1s, background 0.1s;
 }
-.neck-cell.open .pos-label {
-  background: var(--sc-high);
+.neck-cell.open .dot {
+  background: var(--wood);
+  border: 2px solid var(--on-surface);
 }
-.neck-cell.octave .pos-label {
-  border-color: var(--wood-line);
-  border-width: 2px;
-}
-.neck-cell:hover .pos-label {
-  border-color: var(--primary);
-}
-.neck-cell.lit .pos-label {
-  background: var(--lit);
+.neck-cell.lit .dot {
+  background: var(--lit-strong);
   border-color: var(--lit-strong);
+  transform: scale(1.6);
 }
-.neck-cell.pressed .pos-label {
+.neck-cell.pressed .dot {
   background: var(--primary);
-  color: var(--on-primary);
   border-color: var(--primary);
-  transform: scale(1.12);
+  transform: scale(2);
 }
 
 /* 尺八のボタン */

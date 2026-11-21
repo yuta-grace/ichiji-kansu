@@ -35,7 +35,9 @@ export function ShakuhachiPad({
                   className={`pad-btn${basic ? ' basic' : ''}${active.has(midi) ? ' lit' : ''}`}
                   onPointerDown={(e) => {
                     e.preventDefault();
-                    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+                    const el = e.target as HTMLElement;
+                    // タッチは押した要素に捕まるので外す（指を滑らせたら離したことにするため）
+                    if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
                     onDown(midi, e.pointerId);
                   }}
                   onPointerUp={(e) => onUp(e.pointerId)}
