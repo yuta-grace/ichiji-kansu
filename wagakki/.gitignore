@@ -1,0 +1,8 @@
+node_modules
+dist
+# 琴古流フォントは再配布しない（設計書「尺八のフォント」）
+fonts/
+*.ttf
+*.otf
+*.woff
+*.woff2

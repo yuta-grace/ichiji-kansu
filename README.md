@@ -3,6 +3,8 @@
 設計書：[docs/concept.md](docs/concept.md)（唯一の設計書）
 公開の手順：[docs/deploy.md](docs/deploy.md)（GitHub Pages）
 
+別のアプリ：[wagakki/](wagakki/README.md)（三味線・尺八の演奏と楽譜作成。公開の手順には含まない）
+
 ## 動かし方
 
 ```sh
