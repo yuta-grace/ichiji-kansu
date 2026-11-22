@@ -13,6 +13,7 @@ import { instrumentDef, INSTRUMENT_LIST } from '../lib/instruments';
 
 const NOTATION_LABEL: Record<ScoreNotation, string> = { bunka: '文化譜', kinko: '琴古譜', staff: '五線譜' };
 import { BarSlot } from '../components/BarSlot';
+import { AuditionBar, type ScratchNote } from '../components/Audition';
 import {
   addTuplet,
   changeSun,
@@ -123,6 +124,8 @@ export function ScoreScreen() {
   const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add' | 'new' | 'marks'>(() => (loadSongs().length ? null : 'new'));
   const [panelOpen, setPanelOpen] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [audition, setAudition] = useState(false);
+  const [scratch, setScratch] = useState<ScratchNote[]>([]);
   const [pdfStage, setPdfStage] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const player = useRef(new Player());
@@ -264,8 +267,14 @@ export function ScoreScreen() {
     setCursor({ part: pi, t: t + d });
   };
 
-  const onNote = (midi: number, str?: number) =>
+  const onNote = (midi: number, str?: number) => {
+    // 試聴のときは楽譜に入れず、下書きの並びに足す
+    if (audition) {
+      setScratch((n) => [...n, str !== undefined ? { midi, str } : { midi }]);
+      return;
+    }
     writeHere(edit.instrument === 'shamisen' && str !== undefined ? { midi, str } : { midi });
+  };
 
   /**
    * 削除：選んだ範囲、なければカーソルの音（休みの上なら直前の音）を消す。
@@ -563,7 +572,7 @@ export function ScoreScreen() {
               value={allowed.includes(settings.scoreView as ScoreNotation) ? settings.scoreView : 'auto'}
               onChange={(v) => update({ scoreView: v })}
               options={[
-                { value: 'auto', label: mixed ? '自動' : `自動（${NOTATION_LABEL[autoNotation]}）` },
+                { value: 'auto', label: '自動' },
                 ...allowed.map((n) => ({ value: n, label: NOTATION_LABEL[n] })),
               ]}
             />
@@ -651,9 +660,29 @@ export function ScoreScreen() {
             {instText}
           </button>
           <span className="spacer" />
-          <IconButton icon="piano" label="ピアノ鍵盤の表示" selected={settings.showPiano} onClick={() => update({ showPiano: !settings.showPiano })} />
+          <div className="dock-modes" role="radiogroup" aria-label="押した音の行き先">
+            <button type="button" role="radio" aria-checked={!audition} className={!audition ? 'on' : ''} onClick={() => setAudition(false)}>
+              楽譜に入力
+            </button>
+            <button type="button" role="radio" aria-checked={audition} className={audition ? 'on' : ''} onClick={() => setAudition(true)}>
+              試聴
+            </button>
+          </div>
+          {edit.instrument !== 'piano' && (
+            <IconButton icon="piano" label="ピアノ鍵盤の表示" selected={settings.showPiano} onClick={() => update({ showPiano: !settings.showPiano })} />
+          )}
           <IconButton icon={panelOpen ? 'expand' : 'collapse'} label={panelOpen ? '入力の画面をしまう' : '入力の画面を出す'} onClick={() => setPanelOpen((o) => !o)} />
         </div>
+        {panelOpen && audition && (
+          <AuditionBar
+            notes={scratch}
+            setNotes={setScratch}
+            instrument={edit.instrument}
+            sun={edit.sun}
+            tuning={edit.tuning}
+            beatSeconds={(60 / song.tempo) * Math.max(0.25, dur / PPQ)}
+          />
+        )}
         {panelOpen && edit && (
           <InstrumentPanel instrument={edit.instrument} sun={edit.sun} tuning={edit.tuning} external={sounding} onNote={onNote} volume={edit.volume} />
         )}

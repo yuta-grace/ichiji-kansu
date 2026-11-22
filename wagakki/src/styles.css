@@ -1981,3 +1981,77 @@ input[type='range'] {
     height: 26px;
   }
 }
+
+/* 入力の欄：押した音の行き先（楽譜／試聴） */
+.dock-modes {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  overflow: hidden;
+  height: 26px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.dock-modes button {
+  border: 0;
+  background: none;
+  padding: 0 10px;
+  font-size: var(--fs-s);
+  color: var(--text-2);
+}
+.dock-modes button + button {
+  border-left: 1px solid var(--line);
+}
+.dock-modes button.on {
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: 600;
+}
+/* 試聴の並び */
+.audition {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+  flex-shrink: 0;
+}
+.audition-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.audition-list li {
+  flex-shrink: 0;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  background: var(--panel);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+.audition-list li.on {
+  border-color: var(--play);
+  background: var(--play-weak);
+}
+.audition-list li.audition-empty {
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  padding: 0;
+}
+.audition-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
