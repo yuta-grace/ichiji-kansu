@@ -9,7 +9,9 @@ import { Button, Dialog, IconButton, Segmented, Select, Switch } from '../compon
 import { Icon } from '../components/icons';
 import { honLabel, SUN_MAX, SUN_MIN, sunLabelWithNote } from '../lib/pitch';
 import { tuningOf } from '../lib/shamisen';
-import { instrumentDef } from '../lib/instruments';
+import { instrumentDef, INSTRUMENT_LIST } from '../lib/instruments';
+
+const NOTATION_LABEL: Record<ScoreNotation, string> = { bunka: '文化譜', kinko: '琴古譜', staff: '五線譜' };
 import { BarSlot } from '../components/BarSlot';
 import {
   addTuplet,
@@ -113,7 +115,8 @@ export function ScoreScreen() {
   const [triplet, setTriplet] = useState(false);
   const [playBeat, setPlayBeat] = useState<number | null>(null);
   const [loop, setLoop] = useState(false);
-  const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add'>(null);
+  // 初めて開いたとき（保存した曲がない）は、楽器を選ぶところから始める
+  const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add' | 'new'>(() => (loadSongs().length ? null : 'new'));
   const [panelOpen, setPanelOpen] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [pdfStage, setPdfStage] = useState(false);
@@ -125,8 +128,12 @@ export function ScoreScreen() {
   const [, bump] = useState(0); // 元に戻す・やり直しのボタンの状態を描き直す
 
   const edit = song.parts[editIdx] ?? song.parts[0];
+  // 楽器に合う記譜方式だけ選べる。前の形式の「合奏」の曲（楽器が混ざっている）は全部選べる
+  const mixed = song.parts.some((p) => p.instrument !== song.instrument);
+  const allowed: ScoreNotation[] = mixed ? ['bunka', 'kinko', 'staff'] : instrumentDef(song.instrument).notations;
+  const autoNotation = instrumentDef(edit.instrument).notations[0];
   const notation: ScoreNotation =
-    settings.scoreView === 'auto' ? (edit.instrument === 'shamisen' ? 'bunka' : 'kinko') : settings.scoreView;
+    settings.scoreView === 'auto' || !allowed.includes(settings.scoreView) ? autoNotation : settings.scoreView;
   // 3連のときは付点を使わない（付点の3連は普通の長さと区別できないため）
   const dur = triplet ? Math.round((base * 2) / 3) : Math.round(base * (dotted ? 1.5 : 1));
 
@@ -536,28 +543,26 @@ export function ScoreScreen() {
       <BarSlot>
         <button type="button" className="bar-title" onClick={() => setDlg('song')} title="曲の設定（曲名・テンポ・拍子・小節）">
           <span className="bar-title-main">{song.title}</span>
-          <span className="bar-title-sub">
-            {song.instrument !== edit.instrument || song.parts.some((p) => p.instrument !== song.instrument) ? '合奏' : instrumentDef(song.instrument).label}
-          </span>
+          <span className="bar-title-sub">{mixed ? '合奏' : instrumentDef(song.instrument).label}</span>
         </button>
         <span className="spacer" />
         <div className="bar-group hide-narrow">
           <IconButton icon="undo" label="元に戻す（Ctrl+Z）" onClick={undo} disabled={!past.current.length} />
           <IconButton icon="redo" label="やり直す（Ctrl+Shift+Z）" onClick={redo} disabled={!future.current.length} />
         </div>
-        <div className="bar-group">
-          <Select<Settings['scoreView']>
-            label="表示する楽譜"
-            value={settings.scoreView}
-            onChange={(v) => update({ scoreView: v })}
-            options={[
-              { value: 'auto', label: '自動' },
-              { value: 'bunka', label: '文化譜' },
-              { value: 'kinko', label: '琴古譜' },
-              { value: 'staff', label: '五線譜' },
-            ]}
-          />
-        </div>
+        {allowed.length > 1 && (
+          <div className="bar-group">
+            <Select<Settings['scoreView']>
+              label="表示する楽譜"
+              value={allowed.includes(settings.scoreView as ScoreNotation) ? settings.scoreView : 'auto'}
+              onChange={(v) => update({ scoreView: v })}
+              options={[
+                { value: 'auto', label: mixed ? '自動' : `自動（${NOTATION_LABEL[autoNotation]}）` },
+                ...allowed.map((n) => ({ value: n, label: NOTATION_LABEL[n] })),
+              ]}
+            />
+          </div>
+        )}
         <div className="bar-group transport">
           <button type="button" className="tempo-btn hide-narrow" onClick={() => setDlg('song')} title="テンポ">
             ♩={song.tempo}
@@ -652,7 +657,7 @@ export function ScoreScreen() {
         <span>
           {curMeasure}小節 {beatText}
         </span>
-        <span>長さ {durText}</span>
+        <span>長さ {tupletAt(edit.tuplets, cursor.t) ? '3連の中（1/3ずつ）' : durText}</span>
         {selection && <span>範囲選択中</span>}
         <span className="spacer" />
         <span className="hide-narrow">
@@ -669,6 +674,7 @@ export function ScoreScreen() {
       <PartDialog
         open={dlg === 'part'}
         part={edit}
+        canChangeInstrument={mixed}
         canDelete={song.parts.length > 1}
         onClose={() => setDlg(null)}
         onChange={(f) => mutate((s) => ({ ...s, parts: s.parts.map((p, i) => (i === editIdx ? f(p) : p)) }))}
@@ -683,6 +689,7 @@ export function ScoreScreen() {
         open={dlg === 'add'}
         onClose={() => setDlg(null)}
         defaults={edit}
+        only={mixed ? undefined : [song.instrument]}
         onAdd={(inst, sun, tuning) => {
           const n = song.parts.length;
           mutate((s) => ({ ...s, parts: [...s.parts, newPart(inst, sun, tuning, songLen(s), `${inst === 'shamisen' ? '三味線' : '尺八'}${n + 1}`)] }));
@@ -711,7 +718,26 @@ export function ScoreScreen() {
           setDlg(null);
           void exportAs(k);
         }}
+        onNew={() => setDlg('new')}
         toast={toast}
+      />
+      <NewSongDialog
+        open={dlg === 'new'}
+        defaults={edit}
+        onClose={() => setDlg(null)}
+        onCreate={(s) => {
+          saveSong(latest.current);
+          player.current.stop();
+          setPlayBeat(null);
+          past.current = [];
+          future.current = [];
+          restore(s);
+          setEditIdx(0);
+          setCursor({ part: 0, t: 0 });
+          setAnchor(0);
+          update({ scoreView: 'auto' });
+          setDlg(null);
+        }}
       />
       <div className="print-only">
         <h1 className="print-title">{song.title}</h1>
@@ -738,6 +764,7 @@ export function ScoreScreen() {
 function PartDialog({
   open,
   part,
+  canChangeInstrument,
   canDelete,
   onClose,
   onChange,
@@ -745,6 +772,7 @@ function PartDialog({
 }: {
   open: boolean;
   part: Part;
+  canChangeInstrument: boolean;
   canDelete: boolean;
   onClose: () => void;
   onChange: (f: (p: Part) => Part) => void;
@@ -760,21 +788,27 @@ function PartDialog({
         <span className="field-label">名前</span>
         <input id="part-name" value={part.name} maxLength={20} onChange={(e) => onChange((p) => ({ ...p, name: e.target.value }))} />
       </label>
-      <div className="field-row">
-        <span className="field-label">楽器</span>
-        <InstrumentSelect value={part.instrument} onChange={(v) => onChange((p) => ({ ...p, instrument: v }))} />
-      </div>
-      <SunSelect instrument={part.instrument} value={part.sun} onChange={(v) => onChange((p) => changeSun(p, v, keep))} />
-      <Segmented<'keep' | 'pitch'>
-        dense
-        label="寸法を変えたとき"
-        value={keep ? 'keep' : 'pitch'}
-        onChange={(v) => setKeep(v === 'keep')}
-        options={[
-          { value: 'keep', label: '指使いを保つ（音が動く）' },
-          { value: 'pitch', label: '音の高さを保つ' },
-        ]}
-      />
+      {canChangeInstrument && (
+        <div className="field-row">
+          <span className="field-label">楽器</span>
+          <InstrumentSelect value={part.instrument} onChange={(v) => onChange((p) => ({ ...p, instrument: v }))} />
+        </div>
+      )}
+      {instrumentDef(part.instrument).usesSun && (
+        <>
+          <SunSelect instrument={part.instrument} value={part.sun} onChange={(v) => onChange((p) => changeSun(p, v, keep))} />
+          <Segmented<'keep' | 'pitch'>
+            dense
+            label="寸法を変えたとき"
+            value={keep ? 'keep' : 'pitch'}
+            onChange={(v) => setKeep(v === 'keep')}
+            options={[
+              { value: 'keep', label: '指使いを保つ（音が動く）' },
+              { value: 'pitch', label: '音の高さを保つ' },
+            ]}
+          />
+        </>
+      )}
       {part.instrument === 'shamisen' && (
         <div className="field-row">
           <span className="field-label">調弦</span>
@@ -801,11 +835,13 @@ function AddPartDialog({
   open,
   onClose,
   defaults,
+  only,
   onAdd,
 }: {
   open: boolean;
   onClose: () => void;
   defaults: Part;
+  only?: Instrument[];
   onAdd: (inst: Instrument, sun: number, tuning: Part['tuning']) => void;
 }) {
   const [inst, setInst] = useState<Instrument>(defaults?.instrument ?? 'shamisen');
@@ -825,12 +861,14 @@ function AddPartDialog({
         </>
       }
     >
-      <div className="field-row">
-        <span className="field-label">楽器</span>
-        <InstrumentSelect value={inst} onChange={setInst} />
-      </div>
-      <SunSelect instrument={inst} value={sun} onChange={setSun} />
-      {inst === 'shamisen' && (
+      {(!only || only.length > 1) && (
+        <div className="field-row">
+          <span className="field-label">楽器</span>
+          <InstrumentSelect value={inst} onChange={setInst} only={only} />
+        </div>
+      )}
+      {instrumentDef(inst).usesSun && <SunSelect instrument={inst} value={sun} onChange={setSun} />}
+      {instrumentDef(inst).usesTuning && (
         <div className="field-row">
           <span className="field-label">調弦</span>
           <TuningSelect value={tuning} onChange={setTuning} />
@@ -839,6 +877,76 @@ function AddPartDialog({
     </Dialog>
   );
 }
+
+/** 新しい楽譜：楽器を1つ選ぶ（楽器ごとに記譜方式と入力の画面が決まる） */
+function NewSongDialog({
+  open,
+  defaults,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  defaults: Part;
+  onClose: () => void;
+  onCreate: (s: Song) => void;
+}) {
+  const [inst, setInst] = useState<Instrument>(defaults?.instrument ?? 'shamisen');
+  const [sun, setSun] = useState(defaults?.sun ?? 18);
+  const [tuning, setTuning] = useState<Part['tuning']>(defaults?.tuning ?? 'honchoshi');
+  const [title, setTitle] = useState('');
+  const def = instrumentDef(inst);
+  return (
+    <Dialog
+      open={open}
+      title="新しい楽譜"
+      onClose={onClose}
+      actions={
+        <>
+          <Button variant="text" onClick={onClose}>
+            やめる
+          </Button>
+          <Button
+            onClick={() => {
+              const s = newSong(inst, sun, tuning);
+              if (title.trim()) s.title = title.trim();
+              onCreate(s);
+              setTitle('');
+            }}
+          >
+            作る
+          </Button>
+        </>
+      }
+    >
+      <div className="inst-cards" role="radiogroup" aria-label="楽器">
+        {INSTRUMENT_LIST.map((d) => (
+          <button key={d.id} type="button" role="radio" aria-checked={inst === d.id} className={`inst-card${inst === d.id ? ' on' : ''}`} onClick={() => setInst(d.id)}>
+            <span className="inst-card-name">{d.label}</span>
+            <span className="inst-card-sub">{d.notations.map((n) => NOTATION_LABEL[n]).join('・')}</span>
+          </button>
+        ))}
+      </div>
+      <label className="field">
+        <span className="field-label">曲名</span>
+        <input id="new-title" value={title} maxLength={40} placeholder="無題の曲" onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      {def.usesSun && <SunSelect instrument={inst} value={sun} onChange={setSun} />}
+      {def.usesTuning && (
+        <div className="field-row">
+          <span className="field-label">調弦</span>
+          <TuningSelect value={tuning} onChange={setTuning} />
+        </div>
+      )}
+      <p className="hint">{NEW_HINT[inst]}</p>
+    </Dialog>
+  );
+}
+
+const NEW_HINT: Record<Instrument, string> = {
+  piano: '五線譜（ト音記号）で書きます。いまは単音のみです（和音と大譜表はあとで対応します）。',
+  shakuhachi: '琴古流の縦譜で書きます。五線譜にも切り替えられます。',
+  shamisen: '文化譜（津軽の勘所の数字）で書きます。五線譜にも切り替えられます。',
+};
 
 function SongDialog({
   open,
@@ -913,6 +1021,7 @@ function FilesDialog({
   onClose,
   onOpen,
   onExport,
+  onNew,
   toast,
 }: {
   open: boolean;
@@ -920,6 +1029,7 @@ function FilesDialog({
   onClose: () => void;
   onOpen: (s: Song) => void;
   onExport: (kind: ExportKind) => void;
+  onNew: () => void;
   toast: (m: string) => void;
 }) {
   const [list, setList] = useState<Song[]>([]);
@@ -960,12 +1070,9 @@ function FilesDialog({
         <Button
           icon="add"
           variant="tonal"
-          onClick={() => {
-            saveSong(song);
-            onOpen(newSong(song.parts[0]?.instrument, song.parts[0]?.sun, song.parts[0]?.tuning));
-          }}
+          onClick={onNew}
         >
-          新しい曲
+          新しい楽譜
         </Button>
         <Button icon="upload" variant="tonal" onClick={() => fileRef.current?.click()}>
           ファイルから読み込み

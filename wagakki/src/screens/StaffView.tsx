@@ -134,7 +134,7 @@ function StaffLine({
     const accent = css.getPropertyValue('--primary').trim() || '#415f91';
     const lit = css.getPropertyValue('--lit-strong').trim() || '#e8643c';
     const totalW = widths.reduce((a, b) => a + b, 0) + 10;
-    const height = TOP + song.parts.length * STAFF_H + 10;
+    const height = TOP + song.parts.length * STAFF_H + 26; // 下向きの符尾の3連符の数字が切れないように
     const renderer = new vf.Renderer(el, vf.Renderer.Backends.SVG);
     renderer.resize(totalW, height);
     const ctx = renderer.getContext();
