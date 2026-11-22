@@ -225,6 +225,64 @@ export function playShakuhachi(midi: number, opts: PlayOpts = {}): Voice {
   };
 }
 
+// ---------------- ピアノ ----------------
+
+/** 倍音を重ねたピアノに近い音。打鍵で始まり、押している間ゆっくり減衰、離すと止まる */
+export function playPiano(midi: number, opts: PlayOpts = {}): Voice {
+  const { c, out } = target(opts);
+  const t = opts.when ?? c.currentTime;
+  const f = freq(midi, opts.a4 ?? 440);
+  const vol = (opts.gain ?? 0.8) * 0.32;
+  const g = c.createGain();
+  // 高い音ほど早く減衰する
+  const decay = Math.max(0.6, 3.2 - (midi - 48) * 0.05);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0008, t + decay);
+  const tone = c.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.setValueAtTime(Math.min(12000, f * 10), t);
+  tone.frequency.exponentialRampToValueAtTime(Math.min(6000, f * 3), t + 0.4);
+  tone.connect(g).connect(out);
+  const partials: [number, number, OscillatorType][] = [
+    [1, 1, 'triangle'],
+    [2, 0.35, 'sine'],
+    [3, 0.12, 'sine'],
+    [4, 0.06, 'sine'],
+  ];
+  const oscs = partials.map(([k, amp, type]) => {
+    const o = c.createOscillator();
+    o.type = type;
+    o.frequency.value = f * k * (1 + (k - 1) * 0.0008); // 少しずつずらして弦らしく
+    const og = c.createGain();
+    og.gain.value = amp;
+    o.connect(og).connect(tone);
+    o.start(t);
+    o.stop(t + decay + 0.1);
+    return o;
+  });
+  let stopped = false;
+  return {
+    stop(when) {
+      if (stopped) return;
+      stopped = true;
+      const s = Math.max(when ?? c.currentTime, t + 0.03);
+      g.gain.cancelScheduledValues(s);
+      g.gain.setTargetAtTime(0, s, 0.06);
+      for (const o of oscs) {
+        try {
+          o.stop(s + 0.4);
+        } catch {
+          /* 既に止まっている */
+        }
+      }
+    },
+  };
+}
+
 export function playNote(inst: Instrument, midi: number, opts: PlayOpts = {}): Voice {
-  return inst === 'shamisen' ? playShamisen(midi, opts) : playShakuhachi(midi, opts);
+  if (inst === 'shamisen') return playShamisen(midi, opts);
+  if (inst === 'piano') return playPiano(midi, opts);
+  return playShakuhachi(midi, opts);
 }

@@ -1,11 +1,13 @@
 // 曲を画面に出さずに録音して WAV にする
 import { playNote } from './engine';
 import { encodeWav } from '../lib/exporters';
-import { partEvents, type Song } from '../lib/score';
+import { perfNotes, playOrder } from '../lib/playorder';
+import type { Song } from '../lib/score';
 
 export async function renderWav(song: Song, a4: number): Promise<Uint8Array> {
   const spb = 60 / song.tempo;
-  const seconds = song.beatsPerMeasure * song.measures * spb + 2.5; // 最後の音の響きの分
+  const order = playOrder(song).measures; // 繰り返し記号に沿った演奏の順番
+  const seconds = song.beatsPerMeasure * order.length * spb + 2.5; // 最後の音の響きの分
   const sr = 44100;
   const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sr), sr);
   const comp = ctx.createDynamicsCompressor();
@@ -19,12 +21,12 @@ export async function renderWav(song: Song, a4: number): Promise<Uint8Array> {
     const g = ctx.createGain();
     g.gain.value = p.volume;
     g.connect(master);
-    const ev = partEvents(p);
+    const ev = perfNotes(song, p, order);
     ev.forEach((e, i) => {
       const when = 0.05 + e.start * spb;
       const v = playNote(p.instrument, e.midi, { ctx, dest: g, when, gain: 0.9, a4 });
       // 再生と同じ決まり：尺八は長さの分、三味線は次の音で止める
-      if (p.instrument === 'shakuhachi') v.stop(when + e.dur * spb - 0.03);
+      if (p.instrument !== 'shamisen') v.stop(when + e.dur * spb - 0.03);
       else if (ev[i + 1]) v.stop(0.05 + ev[i + 1].start * spb);
     });
   }

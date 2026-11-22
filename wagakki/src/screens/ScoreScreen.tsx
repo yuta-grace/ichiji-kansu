@@ -9,11 +9,14 @@ import { Button, Dialog, IconButton, Segmented, Select, Switch } from '../compon
 import { Icon } from '../components/icons';
 import { SUN_MAX, SUN_MIN, sunLabel } from '../lib/pitch';
 import {
+  addTuplet,
   changeSun,
+  deleteMeasureAt,
+  deleteNoteAt,
+  deleteRange,
   eventAt,
   extendAt,
-  insertTime,
-  isNote,
+  insertMeasureAt,
   MAX_PARTS,
   measureLen,
   newPart,
@@ -24,10 +27,11 @@ import {
   pasteAt,
   placed,
   PPQ,
-  removeTime,
   shiftAllSun,
   sliceEvents,
   songLen,
+  tupletAt,
+  withEvents,
   writeAt,
   type Ev,
   type Instrument,
@@ -84,7 +88,8 @@ export function ScoreScreen() {
   const edit = song.parts[editIdx] ?? song.parts[0];
   const notation: ScoreNotation =
     settings.scoreView === 'auto' ? (edit.instrument === 'shamisen' ? 'bunka' : 'kinko') : settings.scoreView;
-  const dur = Math.round(base * (dotted ? 1.5 : 1) * (triplet ? 2 / 3 : 1));
+  // 3連のときは付点を使わない（付点の3連は普通の長さと区別できないため）
+  const dur = triplet ? Math.round((base * 2) / 3) : Math.round(base * (dotted ? 1.5 : 1));
 
   // ---- 保存 ----
   const latest = useRef(song);
@@ -145,9 +150,10 @@ export function ScoreScreen() {
     restore(next);
   };
 
+  // 音を書き換えるときは必ずここを通す（3連符の区間を保つ）
   const setPartEvents = (s: Song, pi: number, events: Ev[]): Song => ({
     ...s,
-    parts: s.parts.map((p, i) => (i === pi ? { ...p, events } : p)),
+    parts: s.parts.map((p, i) => (i === pi ? withEvents(p, events) : p)),
   });
 
   /** 曲の終わりを超えるなら小節を足す */
@@ -188,28 +194,41 @@ export function ScoreScreen() {
   const writeHere = (ev: Omit<Ev, 'dur'>, extend = false) => {
     const pi = editIdx;
     const t = cursor.part === pi ? cursor.t : 0;
-    let s = grow(latest.current, t + dur);
+    let s = latest.current;
+    // 3連符：区間の中ならそのマスの長さ。3連のモードで区間の外なら、ここに区間を作る
+    let d = dur;
+    const inside = tupletAt(s.parts[pi].tuplets, t);
+    if (inside) d = inside.span / 3;
+    else if (triplet) {
+      const span = base * 2;
+      s = grow(s, t + span);
+      s = { ...s, parts: s.parts.map((p, i) => (i === pi ? addTuplet(p, t, span) : p)) };
+      d = span / 3;
+    }
+    s = grow(s, t + d);
     const evs = s.parts[pi].events;
-    s = setPartEvents(s, pi, extend ? extendAt(evs, t, dur) : writeAt(evs, t, dur, ev));
-    commit(grow(s, t + dur));
+    s = setPartEvents(s, pi, extend ? extendAt(evs, t, d) : writeAt(evs, t, d, ev));
+    commit(grow(s, t + d));
     setSelection(null);
-    setAnchor(t + dur);
-    setCursor({ part: pi, t: t + dur });
+    setAnchor(t + d);
+    setCursor({ part: pi, t: t + d });
   };
 
   const onNote = (midi: number, str?: number) =>
     writeHere(edit.instrument === 'shamisen' && str !== undefined ? { midi, str } : { midi });
 
-  /** 選んだ範囲（なければカーソルの音）を休みにする */
+  /**
+   * 削除：選んだ範囲、なければカーソルの音（休みの上なら直前の音）を消す。
+   * カーソルは直前の音へ移るので、続けて押すと後ろから順に消える。直したいときは消さずに上書きする。
+   */
   const clearHere = () => {
     const pi = cursor.part;
     const evs = latest.current.parts[pi].events;
-    if (selection && selection.part === pi) {
-      commit(setPartEvents(latest.current, pi, writeAt(evs, selection.a, selection.b - selection.a, {})));
-      return;
-    }
-    const e = eventAt(evs, cursor.t);
-    if (e && isNote(e)) commit(setPartEvents(latest.current, pi, writeAt(evs, e.start, e.dur, {})));
+    const r = selection && selection.part === pi ? deleteRange(evs, selection.a, selection.b) : deleteNoteAt(evs, cursor.t);
+    if (r.events !== evs) commit(setPartEvents(latest.current, pi, r.events));
+    setSelection(null);
+    setAnchor(r.t);
+    setCursor({ part: pi, t: r.t });
   };
 
   const copy = (cut: boolean) => {
@@ -243,21 +262,20 @@ export function ScoreScreen() {
 
   const insertMeasure = () => {
     const s = latest.current;
-    const mLen = measureLen(s);
-    const at = Math.floor(cursor.t / mLen) * mLen;
-    commit({ ...s, measures: s.measures + 1, parts: s.parts.map((p) => ({ ...p, events: insertTime(p.events, at, mLen) })) });
-    toast(`${at / mLen + 1}小節目の前に1小節入れました`);
+    const m = Math.floor(cursor.t / measureLen(s));
+    commit(insertMeasureAt(s, m));
+    toast(`${m + 1}小節目の前に1小節入れました`);
   };
 
   const deleteMeasure = () => {
     const s = latest.current;
     if (s.measures <= 1) return;
     const mLen = measureLen(s);
-    const at = Math.floor(cursor.t / mLen) * mLen;
-    commit({ ...s, measures: s.measures - 1, parts: s.parts.map((p) => ({ ...p, events: removeTime(p.events, at, at + mLen) })) });
-    setCursor((c) => ({ ...c, t: Math.max(0, Math.min(at, songLen(s) - mLen - 1)) }));
+    const m = Math.floor(cursor.t / mLen);
+    commit(deleteMeasureAt(s, m));
+    setCursor((c) => ({ ...c, t: Math.max(0, Math.min(m * mLen, songLen(s) - mLen - 1)) }));
     setSelection(null);
-    toast(`${at / mLen + 1}小節目を消しました`);
+    toast(`${m + 1}小節目を消しました`);
   };
 
   // ---- 再生 ----
@@ -268,8 +286,7 @@ export function ScoreScreen() {
       setPlayBeat(null);
       return;
     }
-    const total = songLen(song) / PPQ;
-    const from = cursor.t / PPQ >= total - 0.01 ? 0 : cursor.t / PPQ;
+    const from = cursor.t / PPQ;
     let last = -1;
     player.current.start(
       song,
@@ -385,17 +402,10 @@ export function ScoreScreen() {
       setCursor({ part: n, t: cursor.t });
     } else if (k === '-' || k === 'ー') (done(), writeHere({}, true));
     else if (k === '0' || k === 'r') (done(), writeHere({}));
-    else if (k === 'Delete') (done(), clearHere());
-    else if (k === 'Backspace') {
-      done();
-      const prev = stepFrom(cursor.part, cursor.t, -1);
-      const evs = latest.current.parts[cursor.part].events;
-      const ev = eventAt(evs, prev);
-      setCursor({ part: cursor.part, t: prev });
-      if (ev && isNote(ev)) commit(setPartEvents(latest.current, cursor.part, writeAt(evs, ev.start, ev.dur, {})));
-    } else if (k === ' ') (done(), togglePlay());
-    else if (k === '.') (done(), setDotted((d) => !d));
-    else if (k === ',') (done(), setTriplet((d) => !d));
+    else if (k === 'Delete' || k === 'Backspace') (done(), clearHere());
+    else if (k === ' ') (done(), togglePlay());
+    else if (k === '.') (done(), setDotted((d) => !d), setTriplet(false));
+    else if (k === ',') (done(), setTriplet((d) => !d), setDotted(false));
     else if (k === 'Escape') {
       setSelection(null);
       setRangeMode(false);
@@ -501,10 +511,28 @@ export function ScoreScreen() {
               </button>
             ))}
           </div>
-          <button type="button" className={`chip-btn${dotted ? ' on' : ''}`} aria-pressed={dotted} onClick={() => setDotted((d) => !d)} title="付点（. キー）">
+          <button
+            type="button"
+            className={`chip-btn${dotted ? ' on' : ''}`}
+            aria-pressed={dotted}
+            onClick={() => {
+              setDotted((d) => !d);
+              setTriplet(false);
+            }}
+            title="付点（. キー）"
+          >
             付点
           </button>
-          <button type="button" className={`chip-btn${triplet ? ' on' : ''}`} aria-pressed={triplet} onClick={() => setTriplet((d) => !d)} title="3連符（, キー）">
+          <button
+            type="button"
+            className={`chip-btn${triplet ? ' on' : ''}`}
+            aria-pressed={triplet}
+            onClick={() => {
+              setTriplet((d) => !d);
+              setDotted(false);
+            }}
+            title="3連符（, キー）：選んだ長さ2つ分の時間に3つ入れる"
+          >
             3連
           </button>
           <span className="spacer" />

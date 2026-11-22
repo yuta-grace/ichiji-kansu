@@ -1,11 +1,11 @@
 // 書き出し：MIDI・MusicXML・zip（どれも曲のデータから直接作る）
 import { measureItems, spell, type NoteValue } from './notation';
-import { isNote, measureLen, placed, PPQ, type Part, type Song } from './score';
+import { measureLen, PPQ, type Part, type Song } from './score';
+import { instrumentDef } from './instruments';
+import { perfNotes, playOrder } from './playorder';
 
 // ---------------- MIDI（Standard MIDI File, format 1） ----------------
 
-/** General MIDI の音色番号（0 始まり）：三味線 106、尺八 77 */
-const GM_PROGRAM = { shamisen: 106, shakuhachi: 77 } as const;
 
 function vlq(n: number): number[] {
   const bytes = [n & 0x7f];
@@ -32,6 +32,7 @@ const channelOf = (i: number) => (i >= 9 ? i + 1 : i); // 10ch（打楽器）を
 
 export function buildMidi(song: Song): Uint8Array {
   const tracks: number[][] = [];
+  const order = playOrder(song).measures;
   const usPerBeat = Math.round(60_000_000 / song.tempo);
   const title = ascii(song.title);
   tracks.push(
@@ -46,14 +47,15 @@ export function buildMidi(song: Song): Uint8Array {
     const name = ascii(p.name || `Part ${i + 1}`);
     const ev: { t: number; data: number[] }[] = [
       { t: 0, data: [0xff, 0x03, ...vlq(name.length), ...name] },
-      { t: 0, data: [0xc0 | ch, GM_PROGRAM[p.instrument]] },
+      { t: 0, data: [0xc0 | ch, instrumentDef(p.instrument).gmProgram] },
       { t: 0, data: [0xb0 | ch, 7, Math.round((p.muted ? 0 : p.volume) * 127)] },
     ];
-    for (const e of placed(p.events)) {
-      if (!isNote(e)) continue;
+    // MIDI は繰り返し記号を展開した演奏の順番で書く
+    for (const e of perfNotes(song, p, order)) {
       const m = Math.max(0, Math.min(127, e.midi));
-      ev.push({ t: e.start, data: [0x90 | ch, m, 90] });
-      ev.push({ t: e.start + e.dur, data: [0x80 | ch, m, 0] });
+      const t = Math.round(e.start * PPQ);
+      ev.push({ t, data: [0x90 | ch, m, 90] });
+      ev.push({ t: t + Math.round(e.dur * PPQ), data: [0x80 | ch, m, 0] });
     }
     tracks.push(track(ev));
   });
@@ -79,7 +81,7 @@ function partXml(song: Song, p: Part, pi: number): string {
         '        <key><fifths>0</fifths></key>',
         `        <time><beats>${song.beatsPerMeasure}</beats><beat-type>4</beat-type></time>`,
         // 三味線はギターと同じく、1オクターブ上に書くト音記号
-        p.instrument === 'shamisen'
+        instrumentDef(p.instrument).clef === 'treble8vb'
           ? '        <clef><sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change></clef>'
           : '        <clef><sign>G</sign><line>2</line></clef>',
         '      </attributes>',
@@ -93,7 +95,7 @@ function partXml(song: Song, p: Part, pi: number): string {
         );
       }
     }
-    const { items, tuplets } = measureItems(p.events, m * mLen, mLen);
+    const { items, tuplets } = measureItems(p.events, m * mLen, mLen, p.tuplets);
     items.forEach((it, ii) => {
       const tStart = tuplets.find((g) => g.first === ii);
       const tStop = tuplets.find((g) => g.last === ii);
@@ -133,8 +135,8 @@ export function buildMusicXml(song: Song): string {
     .map(
       (p, i) => `    <score-part id="P${i + 1}">
       <part-name>${esc(p.name || `パート${i + 1}`)}</part-name>
-      <score-instrument id="P${i + 1}-I1"><instrument-name>${p.instrument === 'shamisen' ? 'Shamisen' : 'Shakuhachi'}</instrument-name></score-instrument>
-      <midi-instrument id="P${i + 1}-I1"><midi-channel>${channelOf(i) + 1}</midi-channel><midi-program>${GM_PROGRAM[p.instrument] + 1}</midi-program></midi-instrument>
+      <score-instrument id="P${i + 1}-I1"><instrument-name>${{ piano: 'Piano', shamisen: 'Shamisen', shakuhachi: 'Shakuhachi' }[p.instrument]}</instrument-name></score-instrument>
+      <midi-instrument id="P${i + 1}-I1"><midi-channel>${channelOf(i) + 1}</midi-channel><midi-program>${instrumentDef(p.instrument).gmProgram + 1}</midi-program></midi-instrument>
     </score-part>`,
     )
     .join('\n');

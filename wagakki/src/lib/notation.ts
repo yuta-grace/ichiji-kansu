@@ -1,5 +1,5 @@
 // 表記に共通の計算：拍のマス割り（文化譜・琴古譜）と、音符の種類への分解（五線譜・MusicXML）
-import { isNote, placed, PPQ, type Ev } from './score';
+import { isNote, placed, PPQ, type Ev, type Tuplet } from './score';
 
 // ---------------- 拍のマス割り（文化譜・琴古譜） ----------------
 
@@ -115,7 +115,12 @@ export function splitDuration(d: number): { ticks: number; value: NoteValue; dot
 /**
  * 小節 [mStart, mStart+mLen) の音符の並び。小節線と書けない長さはタイで分ける。
  */
-export function measureItems(events: Ev[], mStart: number, mLen: number): { items: Item[]; tuplets: TupletGroup[] } {
+export function measureItems(
+  events: Ev[],
+  mStart: number,
+  mLen: number,
+  regions?: Tuplet[],
+): { items: Item[]; tuplets: TupletGroup[] } {
   const items: Item[] = [];
   const mEnd = mStart + mLen;
   for (const p of placed(events)) {
@@ -138,7 +143,21 @@ export function measureItems(events: Ev[], mStart: number, mLen: number): { item
       pos += x.ticks;
     });
   }
-  // 3連符のまとまり：続く3連符を、実際の長さが8分音符の倍数（240）になったところで区切る
+  // 3連符の区間がデータにあれば、それでまとめる
+  if (regions) {
+    const tuplets: TupletGroup[] = [];
+    for (const r of regions) {
+      const a = r.start - mStart;
+      const b = a + r.span;
+      if (b <= 0 || a >= mLen) continue;
+      const idx = items.map((it, i) => (it.start >= a && it.start < b ? i : -1)).filter((i) => i >= 0);
+      if (!idx.length) continue;
+      idx.forEach((i) => (items[i] = { ...items[i], ...asTriplet(items[i].ticks) }));
+      tuplets.push({ first: idx[0], last: idx[idx.length - 1] });
+    }
+    return { items, tuplets };
+  }
+  // 前の形式（区間の情報なし）：続く3連符を、実際の長さが8分音符の倍数（240）になったところで区切る
   const tuplets: TupletGroup[] = [];
   let i = 0;
   while (i < items.length) {
@@ -157,6 +176,13 @@ export function measureItems(events: Ev[], mStart: number, mLen: number): { item
     i = j;
   }
   return { items, tuplets };
+}
+
+/** 3連符の区間の中の音を、3連符の音符で書く（例：160 → 3連の8分音符） */
+function asTriplet(ticks: number): { value: NoteValue; dots: number; triplet: boolean } {
+  const normal = (ticks * 3) / 2;
+  const p = PLAIN.find(([v]) => v === normal);
+  return p ? { value: p[1], dots: p[2], triplet: true } : { value: '16', dots: 0, triplet: true };
 }
 
 // ---------------- 音名（五線譜・MusicXML） ----------------

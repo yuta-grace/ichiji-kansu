@@ -6,7 +6,7 @@ import type { Instrument } from '../lib/score';
 import { Segmented, Select } from './ui';
 
 /** おすすめの寸法（尺八の標準管） */
-const RECOMMENDED: Record<Instrument, number[]> = { shakuhachi: [18], shamisen: [] };
+const RECOMMENDED: Record<Instrument, number[]> = { piano: [], shakuhachi: [18], shamisen: [] };
 
 export function SunSelect({ instrument, value, onChange, label }: { instrument: Instrument; value: number; onChange: (v: number) => void; label?: string }) {
   const { settings } = useApp();

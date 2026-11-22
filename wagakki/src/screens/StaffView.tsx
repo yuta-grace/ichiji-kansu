@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadVexFlow, type VexFlow } from '../lib/libs';
 import { measureItems, spell, type Item } from '../lib/notation';
 import { measureLen, type Song } from '../lib/score';
+import { instrumentDef } from '../lib/instruments';
 import { PART_COLORS, type ViewProps } from './ScoreView';
 
 const STAFF_H = 96; // 1段の高さ
@@ -70,7 +71,7 @@ function layout(song: Song, width: number): { measures: number[]; widths: number
   const mLen = measureLen(song);
   const usable = Math.max(240, width - LABEL_W - 16);
   const base = (m: number) => {
-    const n = Math.max(...song.parts.map((p) => measureItems(p.events, m * mLen, mLen).items.length));
+    const n = Math.max(...song.parts.map((p) => measureItems(p.events, m * mLen, mLen, p.tuplets).items.length));
     return 36 + n * 30;
   };
   const lines: { measures: number[]; widths: number[] }[] = [];
@@ -144,7 +145,7 @@ function StaffLine({
 
     song.parts.forEach((p, pi) => {
       const y = TOP + pi * STAFF_H;
-      const shamisen = p.instrument === 'shamisen';
+      const shamisen = instrumentDef(p.instrument).clef === 'treble8vb';
       let x = 0;
       let prevNote: InstanceType<VexFlow['StaveNote']> | null = null;
       let prevTieOpen = false;
@@ -154,7 +155,7 @@ function StaffLine({
         if (mi === 0) stave.addClef('treble', 'default', shamisen ? '8vb' : undefined);
         if (m === 0) stave.addTimeSignature(`${song.beatsPerMeasure}/4`);
         stave.setContext(ctx).draw();
-        const { items, tuplets } = measureItems(p.events, m * mLen, mLen);
+        const { items, tuplets } = measureItems(p.events, m * mLen, mLen, p.tuplets);
         const notes = items.map((it) => makeNote(vf, it, shamisen));
         items.forEach((it, i) => {
           const t = m * mLen + it.start;

@@ -115,7 +115,7 @@ describe('楽譜', () => {
       ],
     };
     const s = parseSong(v1);
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
     expect(s.parts[0].events).toEqual([{ dur: Q * 1.5, midi: 62, str: 2 }, { dur: Q / 2, midi: 64 }, { dur: 2 * Q }]);
     expect(total(s.parts[0].events)).toBe(songLen(s));
     expect(() => parseSong({ foo: 1 })).toThrow();
