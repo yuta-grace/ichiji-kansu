@@ -63,6 +63,15 @@ export function SettingsScreen() {
       </section>
 
       <section className="card">
+        <h2>楽譜</h2>
+        <Switch
+          label="複数のパートを同じ画面に出す（本手と替手など）"
+          checked={settings.multiPart}
+          onChange={(v) => update({ multiPart: v })}
+        />
+      </section>
+
+      <section className="card">
         <h2>三味線</h2>
         <div className="field-row">
           <span className="field-label">調子の書き方</span>

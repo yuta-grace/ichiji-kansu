@@ -7,7 +7,10 @@ import { InstrumentPanel } from '../components/InstrumentPanel';
 import { InstrumentSelect, SunSelect, TuningSelect } from '../components/controls';
 import { Button, Dialog, IconButton, Segmented, Select, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
-import { SUN_MAX, SUN_MIN, sunLabel } from '../lib/pitch';
+import { honLabel, SUN_MAX, SUN_MIN, sunLabelWithNote } from '../lib/pitch';
+import { tuningOf } from '../lib/shamisen';
+import { instrumentDef } from '../lib/instruments';
+import { BarSlot } from '../components/BarSlot';
 import {
   addTuplet,
   changeSun,
@@ -50,13 +53,48 @@ function initialSong(): Song {
 }
 
 // 音の長さ（1拍＝480）
-const BASES: { v: number; label: string; key: string }[] = [
-  { v: 1920, label: '4拍', key: '5' },
-  { v: 960, label: '2拍', key: '4' },
-  { v: 480, label: '1拍', key: '3' },
-  { v: 240, label: '½拍', key: '2' },
-  { v: 120, label: '¼拍', key: '1' },
+const BASES: { v: number; label: string; key: string; icon: string }[] = [
+  { v: 1920, label: '4拍（全音符）', key: '5', icon: 'noteWhole' },
+  { v: 960, label: '2拍（2分音符）', key: '4', icon: 'noteHalf' },
+  { v: 480, label: '1拍（4分音符）', key: '3', icon: 'noteQuarter' },
+  { v: 240, label: '½拍（8分音符）', key: '2', icon: 'noteEighth' },
+  { v: 120, label: '¼拍（16分音符）', key: '1', icon: 'note16' },
 ];
+
+/** 道具の列のボタン（アイコンか短い文字） */
+function Tool({
+  icon,
+  text,
+  label,
+  active,
+  disabled,
+  onClick,
+  role,
+}: {
+  icon?: string;
+  text?: string;
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  role?: 'radio';
+}) {
+  return (
+    <button
+      type="button"
+      className={`tool${active ? ' on' : ''}${text ? ' text' : ''}`}
+      title={label}
+      aria-label={label}
+      role={role}
+      aria-checked={role === 'radio' ? !!active : undefined}
+      aria-pressed={role ? undefined : active}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {icon ? <Icon name={icon} size={22} /> : <span>{text}</span>}
+    </button>
+  );
+}
 
 const HISTORY = 200;
 
@@ -77,6 +115,7 @@ export function ScoreScreen() {
   const [loop, setLoop] = useState(false);
   const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add'>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [pdfStage, setPdfStage] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const player = useRef(new Player());
@@ -421,165 +460,205 @@ export function ScoreScreen() {
   }, []);
 
   const viewProps = { song, notation, editIdx };
+  const def = instrumentDef(edit.instrument);
+  const mLen = measureLen(song);
+  const curMeasure = Math.floor(cursor.t / mLen) + 1;
+  const curBeat = (cursor.t % mLen) / PPQ + 1;
+  const beatText = Number.isInteger(curBeat) ? `${curBeat}拍` : `${Math.floor(curBeat)}拍＋${Math.round((curBeat % 1) * 12)}/12`;
+  const durText = `${BASES.find((x) => x.v === base)?.label ?? ''}${dotted ? '・付点' : ''}${triplet ? '・3連' : ''}`;
+  const instText = [
+    def.label,
+    def.usesSun ? (edit.instrument === 'shamisen' && settings.shamisenLabel === 'hon' ? honLabel(edit.sun) : sunLabelWithNote(edit.sun)) : null,
+    def.usesTuning ? tuningOf(edit.tuning).label : null,
+  ]
+    .filter(Boolean)
+    .join('　');
+  const showParts = settings.multiPart || song.parts.length > 1;
+
+  const durTools = (
+    <div className="tool-group" role="radiogroup" aria-label="音の長さ">
+      {BASES.map((b) => (
+        <Tool key={b.v} icon={b.icon} label={`${b.label}（${b.key} キー）`} active={base === b.v} onClick={() => setBase(b.v)} role="radio" />
+      ))}
+      <Tool
+        icon="dot"
+        label="付点（. キー）"
+        active={dotted}
+        onClick={() => {
+          setDotted((d) => !d);
+          setTriplet(false);
+        }}
+      />
+      <Tool
+        text="3"
+        label="3連符（, キー）：選んだ長さ2つ分の時間に3つ入れる"
+        active={triplet}
+        onClick={() => {
+          setTriplet((d) => !d);
+          setDotted(false);
+        }}
+      />
+    </div>
+  );
+  const writeTools = (
+    <div className="tool-group">
+      <Tool icon="restQ" label="休み（0 キー）" onClick={() => writeHere({})} />
+      <Tool icon="tie" label="伸ばし：前の音を延ばす（- キー）" onClick={() => writeHere({}, true)} />
+      <Tool icon="backspace" label="消す：カーソルの音を消して前の音へ（Delete・Backspace）" onClick={clearHere} />
+    </div>
+  );
+  const editTools = (
+    <>
+      <div className="tool-group">
+        <Tool
+          icon="select"
+          label="範囲を選ぶ（Shift を押しながら選んでも同じ）"
+          active={rangeMode}
+          onClick={() => {
+            setRangeMode((m) => !m);
+            setSelection(null);
+            setAnchor(cursor.t);
+          }}
+        />
+        <Tool icon="copy" label="コピー（Ctrl+C）" onClick={() => copy(false)} />
+        <Tool icon="cut" label="切り取り（Ctrl+X）" onClick={() => copy(true)} />
+        <Tool icon="paste" label="貼り付け（Ctrl+V）" onClick={paste} />
+      </div>
+      <div className="tool-group">
+        <Tool icon="measureAdd" label="カーソルのある小節の前に1小節入れる" onClick={insertMeasure} />
+        <Tool icon="measureDel" label="カーソルのある小節を消す" onClick={deleteMeasure} />
+      </div>
+    </>
+  );
 
   return (
     <div className="screen score-screen">
-      <div className="toolbar score-toolbar">
-        <IconButton icon="folder" label="曲（新規・開く・書き出し）" onClick={() => setDlg('files')} />
-        <button type="button" className="title-btn" onClick={() => setDlg('song')}>
-          <span className="song-title">{song.title}</span>
-          <span className="song-meta">
-            ♩={song.tempo}・{song.beatsPerMeasure}拍子・{song.measures}小節
+      <BarSlot>
+        <button type="button" className="bar-title" onClick={() => setDlg('song')} title="曲の設定（曲名・テンポ・拍子・小節）">
+          <span className="bar-title-main">{song.title}</span>
+          <span className="bar-title-sub">
+            {song.instrument !== edit.instrument || song.parts.some((p) => p.instrument !== song.instrument) ? '合奏' : instrumentDef(song.instrument).label}
           </span>
         </button>
         <span className="spacer" />
-        <Select<Settings['scoreView']>
-          label="表示する楽譜"
-          value={settings.scoreView}
-          onChange={(v) => update({ scoreView: v })}
-          options={[
-            { value: 'auto', label: '自動' },
-            { value: 'bunka', label: '文化譜' },
-            { value: 'kinko', label: '琴古譜' },
-            { value: 'staff', label: '五線譜' },
-          ]}
-        />
-        <IconButton icon="loop" label="くり返し再生" variant="outlined" selected={loop} onClick={() => setLoop((l) => !l)} />
-        <IconButton icon={playing ? 'stop' : 'play'} label={playing ? '停止（スペース）' : 'カーソルから再生（スペース）'} variant="filled" onClick={togglePlay} />
-      </div>
-
-      <div className="parts-bar" role="tablist" aria-label="パート">
-        {song.parts.map((p, i) => (
-          <div key={p.id} className={`part-chip${i === editIdx ? ' on' : ''}`}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={i === editIdx}
-              className="part-chip-main"
-              onClick={() => {
-                if (i === editIdx) setDlg('part');
-                setEditIdx(i);
-                setSelection(null);
-                setCursor((c) => ({ part: i, t: c.t }));
-              }}
-            >
-              <span className="swatch" style={{ background: PART_COLORS[i % PART_COLORS.length] }} />
-              <span>{p.name || `パート${i + 1}`}</span>
-              <span className="part-chip-sub">
-                {p.instrument === 'shamisen' ? '三味線' : '尺八'}・{sunLabel(p.sun)}
-              </span>
-              {i === editIdx && <Icon name="edit" size={16} />}
-            </button>
-            <button
-              type="button"
-              className="part-chip-mute"
-              aria-label={p.muted ? `${p.name}の消音を解除` : `${p.name}を消音`}
-              aria-pressed={p.muted}
-              onClick={() => mutate((s) => ({ ...s, parts: s.parts.map((x, j) => (j === i ? { ...x, muted: !x.muted } : x)) }))}
-            >
-              <Icon name={p.muted ? 'volumeOff' : 'volumeOn'} size={18} />
-            </button>
-          </div>
-        ))}
-        {song.parts.length < MAX_PARTS && (
-          <button type="button" className="part-add" onClick={() => setDlg('add')}>
-            <Icon name="add" size={18} />
-            パート
-          </button>
-        )}
-      </div>
-
-      <div className="score-scroll">
-        <ScoreView {...viewProps} cursor={cursor} selection={selection} playBeat={playBeat} onSelect={select} />
-      </div>
-
-      <div className={`input-dock${panelOpen ? '' : ' closed'}`}>
-        <div className="edit-bar">
-          <span className="edit-bar-label">長さ</span>
-          <div className="dur-group" role="radiogroup" aria-label="音の長さ">
-            {BASES.map((b) => (
-              <button
-                key={b.v}
-                type="button"
-                role="radio"
-                aria-checked={base === b.v}
-                className={`dur-btn${base === b.v ? ' on' : ''}`}
-                onClick={() => setBase(b.v)}
-                title={`${b.label}（${b.key} キー）`}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={`chip-btn${dotted ? ' on' : ''}`}
-            aria-pressed={dotted}
-            onClick={() => {
-              setDotted((d) => !d);
-              setTriplet(false);
-            }}
-            title="付点（. キー）"
-          >
-            付点
-          </button>
-          <button
-            type="button"
-            className={`chip-btn${triplet ? ' on' : ''}`}
-            aria-pressed={triplet}
-            onClick={() => {
-              setTriplet((d) => !d);
-              setDotted(false);
-            }}
-            title="3連符（, キー）：選んだ長さ2つ分の時間に3つ入れる"
-          >
-            3連
-          </button>
-          <span className="spacer" />
-          <IconButton icon={panelOpen ? 'expand' : 'collapse'} label={panelOpen ? '楽器の画面を隠す' : '楽器の画面を出す'} onClick={() => setPanelOpen((o) => !o)} />
-        </div>
-        <div className="edit-bar">
-          <IconButton icon="left" label="前へ（←）" onClick={() => select(cursor.part, stepFrom(cursor.part, cursor.t, -1), false)} />
-          <IconButton icon="right" label="次へ（→）" onClick={() => select(cursor.part, stepFrom(cursor.part, cursor.t, 1), false)} />
-          <button type="button" className="chip-btn" onClick={() => writeHere({})} title="休み（0 キー）">
-            ○ 休み
-          </button>
-          <button type="button" className="chip-btn" onClick={() => writeHere({}, true)} title="伸ばし（- キー）">
-            ー 伸ばし
-          </button>
-          <IconButton icon="backspace" label="消す（Delete）" onClick={clearHere} />
-          <span className="bar-sep" />
+        <div className="bar-group hide-narrow">
           <IconButton icon="undo" label="元に戻す（Ctrl+Z）" onClick={undo} disabled={!past.current.length} />
           <IconButton icon="redo" label="やり直す（Ctrl+Shift+Z）" onClick={redo} disabled={!future.current.length} />
-          <span className="bar-sep" />
-          <button
-            type="button"
-            className={`chip-btn${rangeMode ? ' on' : ''}`}
-            aria-pressed={rangeMode}
-            onClick={() => {
-              setRangeMode((m) => !m);
-              setSelection(null);
-              setAnchor(cursor.t);
-            }}
-            title="範囲を選ぶ（Shift を押しながら選んでも同じ）"
-          >
-            範囲
+        </div>
+        <div className="bar-group">
+          <Select<Settings['scoreView']>
+            label="表示する楽譜"
+            value={settings.scoreView}
+            onChange={(v) => update({ scoreView: v })}
+            options={[
+              { value: 'auto', label: '自動' },
+              { value: 'bunka', label: '文化譜' },
+              { value: 'kinko', label: '琴古譜' },
+              { value: 'staff', label: '五線譜' },
+            ]}
+          />
+        </div>
+        <div className="bar-group transport">
+          <button type="button" className="tempo-btn hide-narrow" onClick={() => setDlg('song')} title="テンポ">
+            ♩={song.tempo}
           </button>
-          <IconButton icon="copy" label="コピー（Ctrl+C）" onClick={() => copy(false)} />
-          <IconButton icon="cut" label="切り取り（Ctrl+X）" onClick={() => copy(true)} />
-          <IconButton icon="paste" label="貼り付け（Ctrl+V）" onClick={paste} />
-          <span className="bar-sep" />
-          <button type="button" className="chip-btn" onClick={insertMeasure} title="カーソルのある小節の前に1小節入れる">
-            小節＋
+          <span className="hide-small">
+            <IconButton icon="loop" label="くり返し再生" selected={loop} onClick={() => setLoop((l) => !l)} />
+          </span>
+          <IconButton icon={playing ? 'stop' : 'play'} label={playing ? '停止（スペース）' : 'カーソルから再生（スペース）'} variant="filled" onClick={togglePlay} />
+        </div>
+        <IconButton icon="folder" label="ファイル（新規・開く・書き出し）" onClick={() => setDlg('files')} />
+      </BarSlot>
+
+      <div className="editor">
+        <aside className="toolrail" aria-label="入力の道具">
+          {durTools}
+          {writeTools}
+          <div className="rail-wide">{editTools}</div>
+          <div className="rail-narrow tool-group">
+            <Tool icon="undo" label="元に戻す" onClick={undo} disabled={!past.current.length} />
+            <Tool icon="more" label="ほかの操作" active={moreOpen} onClick={() => setMoreOpen((o) => !o)} />
+          </div>
+        </aside>
+        {moreOpen && (
+          <div className="popover" role="menu" onClick={() => setMoreOpen(false)}>
+            <div className="tool-group">
+              <Tool icon="redo" label="やり直す" onClick={redo} disabled={!future.current.length} />
+              <Tool icon="loop" label="くり返し再生" active={loop} onClick={() => setLoop((l) => !l)} />
+            </div>
+            {editTools}
+          </div>
+        )}
+
+        <div className="canvas">
+          {showParts && (
+            <div className="part-tabs" role="tablist" aria-label="パート">
+              {song.parts.map((p, i) => (
+                <div key={p.id} className={`part-tab${i === editIdx ? ' on' : ''}${p.muted ? ' muted' : ''}`}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={i === editIdx}
+                    onClick={() => {
+                      if (i === editIdx) setDlg('part');
+                      setEditIdx(i);
+                      setSelection(null);
+                      setCursor((c) => ({ part: i, t: c.t }));
+                    }}
+                    title={i === editIdx ? 'もう一度押すとパートの設定' : undefined}
+                  >
+                    <span className="swatch" style={{ background: PART_COLORS[i % PART_COLORS.length] }} />
+                    {p.name || `パート${i + 1}`}
+                  </button>
+                  <button
+                    type="button"
+                    className="part-mute"
+                    aria-label={p.muted ? `${p.name}の消音を解除` : `${p.name}を消音`}
+                    aria-pressed={p.muted}
+                    onClick={() => mutate((s) => ({ ...s, parts: s.parts.map((x, j) => (j === i ? { ...x, muted: !x.muted } : x)) }))}
+                  >
+                    <Icon name={p.muted ? 'volumeOff' : 'volumeOn'} size={16} />
+                  </button>
+                </div>
+              ))}
+              {song.parts.length < MAX_PARTS && (
+                <button type="button" className="part-add" onClick={() => setDlg('add')} title="パートを追加">
+                  <Icon name="add" size={16} />
+                </button>
+              )}
+            </div>
+          )}
+          <div className="score-scroll">
+            <ScoreView {...viewProps} cursor={cursor} selection={selection} playBeat={playBeat} onSelect={select} />
+          </div>
+        </div>
+      </div>
+
+      <section className={`dock${panelOpen ? '' : ' closed'}`} aria-label="入力">
+        <div className="dock-head">
+          <button type="button" className="dock-title" onClick={() => setDlg('part')} title="楽器の設定（寸法・調弦）">
+            {instText}
           </button>
-          <button type="button" className="chip-btn" onClick={deleteMeasure} title="カーソルのある小節を消す">
-            小節−
-          </button>
+          <span className="spacer" />
+          <IconButton icon="piano" label="ピアノ鍵盤の表示" selected={settings.showPiano} onClick={() => update({ showPiano: !settings.showPiano })} />
+          <IconButton icon={panelOpen ? 'expand' : 'collapse'} label={panelOpen ? '入力の画面をしまう' : '入力の画面を出す'} onClick={() => setPanelOpen((o) => !o)} />
         </div>
         {panelOpen && edit && (
           <InstrumentPanel instrument={edit.instrument} sun={edit.sun} tuning={edit.tuning} external={sounding} onNote={onNote} volume={edit.volume} />
         )}
-      </div>
+      </section>
+
+      <footer className="statusbar" aria-live="polite">
+        <span>
+          {curMeasure}小節 {beatText}
+        </span>
+        <span>長さ {durText}</span>
+        {selection && <span>範囲選択中</span>}
+        <span className="spacer" />
+        <span className="hide-narrow">
+          {song.beatsPerMeasure}拍子・{song.measures}小節
+        </span>
+      </footer>
 
       {busy && (
         <div className="busy" role="status">

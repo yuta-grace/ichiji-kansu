@@ -4,6 +4,7 @@ import { honLabel, SUN_LIST, sunLabelWithNote } from '../lib/pitch';
 import { TUNINGS, type Tuning } from '../lib/shamisen';
 import type { Instrument } from '../lib/score';
 import { Segmented, Select } from './ui';
+import { INSTRUMENT_LIST } from '../lib/instruments';
 
 /** おすすめの寸法（尺八の標準管） */
 const RECOMMENDED: Record<Instrument, number[]> = { piano: [], shakuhachi: [18], shamisen: [] };
@@ -28,16 +29,13 @@ export function TuningSelect({ value, onChange }: { value: Tuning; onChange: (v:
   return <Segmented label="調弦" value={value} onChange={onChange} options={TUNINGS.map((t) => ({ value: t.id, label: t.label }))} />;
 }
 
-export function InstrumentSelect({ value, onChange }: { value: Instrument; onChange: (v: Instrument) => void }) {
+export function InstrumentSelect({ value, onChange, only }: { value: Instrument; onChange: (v: Instrument) => void; only?: Instrument[] }) {
   return (
     <Segmented
       label="楽器"
       value={value}
       onChange={onChange}
-      options={[
-        { value: 'shamisen', label: '三味線' },
-        { value: 'shakuhachi', label: '尺八' },
-      ]}
+      options={INSTRUMENT_LIST.filter((d) => !only || only.includes(d.id)).map((d) => ({ value: d.id, label: d.label }))}
     />
   );
 }

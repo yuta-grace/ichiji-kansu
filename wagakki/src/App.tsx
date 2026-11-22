@@ -2,26 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppCtx, type AppState } from './context';
 import { loadSettings, saveSettings, type Settings } from './lib/storage';
 import { detectInstalled, restoreLoaded, type KinkoFont } from './lib/fonts';
-import { Icon } from './components/icons';
-import { Snackbar } from './components/ui';
+import { IconButton, Snackbar } from './components/ui';
 import { PlayScreen } from './screens/PlayScreen';
 import { ScoreScreen } from './screens/ScoreScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 
-type Tab = 'play' | 'score' | 'settings';
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'play', label: '演奏', icon: 'music' },
-  { id: 'score', label: '楽譜', icon: 'score' },
-  { id: 'settings', label: '設定', icon: 'settings' },
-];
+type Mode = 'score' | 'play';
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
-  const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('wagakki.tab') as Tab) || 'play');
+  const [mode, setMode] = useState<Mode>(() => {
+    try {
+      return (sessionStorage.getItem('wagakki.mode') as Mode) || 'score';
+    } catch {
+      return 'score';
+    }
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [installedFonts, setInstalled] = useState<KinkoFont[]>([]);
   const [loadedFont, setLoadedFont] = useState<KinkoFont | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [barSlot, setBarSlot] = useState<HTMLElement | null>(null);
   const msgTimer = useRef<number>();
 
   const update = useCallback((patch: Partial<Settings>) => {
@@ -40,11 +41,11 @@ export function App() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem('wagakki.tab', tab);
+      sessionStorage.setItem('wagakki.mode', mode);
     } catch {
       /* 保存できなくても動く */
     }
-  }, [tab]);
+  }, [mode]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -65,33 +66,39 @@ export function App() {
     return all.find((f) => f.family === settings.kinkoFont) ?? all[0] ?? null;
   }, [settings.kinkoFont, installedFonts, loadedFont]);
 
-  const state: AppState = { settings, update, kinkoFont, installedFonts, loadedFont, setLoadedFont, toast };
+  const state: AppState = { settings, update, kinkoFont, installedFonts, loadedFont, setLoadedFont, toast, barSlot };
 
   return (
     <AppCtx.Provider value={state}>
       <div className="app">
-        <nav className="nav" aria-label="画面">
-          <div className="nav-brand" aria-hidden="true">
+        <header className="appbar">
+          <span className="brand" aria-hidden="true">
             和
-          </div>
-          {TABS.map((t) => (
-            <button key={t.id} type="button" className={`nav-item${tab === t.id ? ' on' : ''}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
-              <span className="nav-indicator">
-                <Icon name={t.icon} />
-              </span>
-              <span className="nav-label">{t.label}</span>
+          </span>
+          <nav className="modes" aria-label="画面">
+            <button type="button" className={mode === 'score' ? 'on' : ''} aria-current={mode === 'score' ? 'page' : undefined} onClick={() => setMode('score')}>
+              楽譜
             </button>
-          ))}
-        </nav>
+            <button type="button" className={mode === 'play' ? 'on' : ''} aria-current={mode === 'play' ? 'page' : undefined} onClick={() => setMode('play')}>
+              演奏
+            </button>
+          </nav>
+          <div className="appbar-slot" ref={setBarSlot} />
+          <IconButton icon="settings" label="設定" onClick={() => setSettingsOpen(true)} />
+        </header>
         <main className="main">
-          <header className="topbar">
-            <h1>和楽器</h1>
-            <span className="topbar-sub">{TABS.find((t) => t.id === tab)?.label}</span>
-          </header>
-          {tab === 'play' && <PlayScreen />}
-          {tab === 'score' && <ScoreScreen />}
-          {tab === 'settings' && <SettingsScreen />}
+          {mode === 'score' && <ScoreScreen />}
+          {mode === 'play' && <PlayScreen />}
         </main>
+        {settingsOpen && (
+          <div className="sheet" role="dialog" aria-modal="true" aria-label="設定">
+            <div className="sheet-head">
+              <h2>設定</h2>
+              <IconButton icon="close" label="閉じる" onClick={() => setSettingsOpen(false)} />
+            </div>
+            <SettingsScreen />
+          </div>
+        )}
         <Snackbar message={msg} />
       </div>
     </AppCtx.Provider>

@@ -11,6 +11,8 @@ export interface AppState {
   loadedFont: KinkoFont | null;
   setLoadedFont: (f: KinkoFont | null) => void;
   toast: (msg: string) => void;
+  /** 上のバーの中の、画面ごとの操作を置く場所（createPortal で使う） */
+  barSlot: HTMLElement | null;
 }
 
 export const AppCtx = createContext<AppState>(null as unknown as AppState);

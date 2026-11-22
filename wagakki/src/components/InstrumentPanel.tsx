@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context';
 import { playNote, type Voice } from '../audio/engine';
-import { pc, shamisenBaseMidi, tsutsuneMidi } from '../lib/pitch';
-import { fingeringFor, rangeOf, type Tuning } from '../lib/shamisen';
-import { shakuhachiRange } from '../lib/shakuhachi';
+import { pc } from '../lib/pitch';
+import { fingeringFor, type Tuning } from '../lib/shamisen';
+import { instrumentDef } from '../lib/instruments';
 import type { Instrument } from '../lib/score';
 import { ShamisenNeck } from './ShamisenNeck';
 import { ShakuhachiPad } from './ShakuhachiPad';
@@ -42,10 +42,7 @@ export function InstrumentPanel({
     };
   }, []);
 
-  const range = useMemo<[number, number]>(
-    () => (instrument === 'shamisen' ? rangeOf(sun, tuning) : shakuhachiRange(sun)),
-    [instrument, sun, tuning],
-  );
+  const range = useMemo<[number, number]>(() => instrumentDef(instrument).range(sun, tuning), [instrument, sun, tuning]);
   const inRange = useCallback((m: number) => m >= range[0] && m <= range[1], [range]);
 
   const active = useMemo(() => {
@@ -96,7 +93,7 @@ export function InstrumentPanel({
   upRef.current = up;
   useEffect(() => {
     const keysDown = new Set<string>();
-    const base = instrument === 'shamisen' ? shamisenBaseMidi(sun) : tsutsuneMidi(sun);
+    const base = instrumentDef(instrument).base(sun);
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t.closest('input, textarea, select, dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -128,11 +125,12 @@ export function InstrumentPanel({
     };
   }, [instrument, sun, tuning, oct]);
 
-  const basePc = pc(instrument === 'shamisen' ? shamisenBaseMidi(sun) : tsutsuneMidi(sun));
+  const basePc = pc(instrumentDef(instrument).base(sun));
 
   return (
     <div className="instrument-panel">
       {oct !== 0 && <div className="oct-badge">キーボード：{oct > 0 ? `+${oct}` : oct} オクターブ</div>}
+      {instrument !== 'piano' && (
       <div className="instrument-body">
         {instrument === 'shamisen' ? (
           <ShamisenNeck
@@ -150,9 +148,11 @@ export function InstrumentPanel({
           <ShakuhachiPad sun={sun} active={active} onDown={(m, id) => down(m, id)} onUp={up} />
         )}
       </div>
-      {settings.showPiano && (
+      )}
+      {(settings.showPiano || instrument === 'piano') && (
         <Piano
-          range={[range[0] - 2, range[1] + 2]}
+          big={instrument === 'piano'}
+          range={instrument === 'piano' ? range : [range[0] - 2, range[1] + 2]}
           active={active}
           basePc={basePc}
           inRange={inRange}

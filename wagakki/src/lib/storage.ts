@@ -12,6 +12,8 @@ export interface Settings {
   showPiano: boolean;
   /** 楽譜の表記：auto＝編集中のパートの楽器に合わせる */
   scoreView: 'auto' | 'bunka' | 'kinko' | 'staff';
+  /** 複数のパートを同じ画面に出す（本手と替手など） */
+  multiPart: boolean;
   /** 'auto'：見つかった琴古フォント、'kana'：カタカナ、それ以外：フォント名 */
   kinkoFont: string;
   theme: 'system' | 'light' | 'dark';
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bunkaTop: 'san',
   showPiano: true,
   scoreView: 'auto',
+  multiPart: false,
   kinkoFont: 'auto',
   theme: 'system',
   instrument: 'shamisen',

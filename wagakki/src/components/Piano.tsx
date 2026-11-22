@@ -6,6 +6,7 @@ import { isBlackKey, movableName, noteName, pc } from '../lib/pitch';
 const WHITE_W = 40;
 
 export function Piano({
+  big,
   range,
   active,
   basePc,
@@ -13,6 +14,8 @@ export function Piano({
   onDown,
   onUp,
 }: {
+  /** ピアノが主役のとき（大きく表示） */
+  big?: boolean;
   range: [number, number];
   active: Set<number>;
   /** 移動ドの「ド」 */
@@ -66,7 +69,7 @@ export function Piano({
   });
 
   return (
-    <div className="piano-wrap" ref={scroller}>
+    <div className={`piano-wrap${big ? ' big' : ''}`} ref={scroller}>
       <div className="piano" style={{ width: whites.length * WHITE_W }}>
         {whites.map((m, i) => (
           <button
