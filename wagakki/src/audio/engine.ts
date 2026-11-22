@@ -4,7 +4,23 @@ import type { Instrument } from '../lib/score';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
-let noiseBuf: AudioBuffer | null = null;
+const noiseBufs = new WeakMap<BaseAudioContext, AudioBuffer>();
+const fluteWaves = new WeakMap<BaseAudioContext, PeriodicWave>();
+
+export interface PlayOpts {
+  when?: number;
+  gain?: number;
+  dest?: AudioNode;
+  a4?: number;
+  /** 画面に出さずに録音するときの AudioContext（WAV の書き出し） */
+  ctx?: BaseAudioContext;
+}
+
+function target(opts: PlayOpts): { c: BaseAudioContext; out: AudioNode } {
+  if (opts.ctx) return { c: opts.ctx, out: opts.dest ?? opts.ctx.destination };
+  const { ctx: c, master } = audio();
+  return { c, out: opts.dest ?? master };
+}
 
 export function audio(): { ctx: AudioContext; master: GainNode } {
   if (!ctx) {
@@ -21,13 +37,15 @@ export function audio(): { ctx: AudioContext; master: GainNode } {
   return { ctx, master: master! };
 }
 
-function noise(c: AudioContext): AudioBuffer {
-  if (noiseBuf && noiseBuf.sampleRate === c.sampleRate) return noiseBuf;
+function noise(c: BaseAudioContext): AudioBuffer {
+  const hit = noiseBufs.get(c);
+  if (hit) return hit;
   const len = c.sampleRate * 2;
-  noiseBuf = c.createBuffer(1, len, c.sampleRate);
-  const d = noiseBuf.getChannelData(0);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  return noiseBuf;
+  noiseBufs.set(c, buf);
+  return buf;
 }
 
 export interface Voice {
@@ -39,7 +57,7 @@ export interface Voice {
 const pluckCache = new Map<string, AudioBuffer>();
 
 /** Karplus-Strong で弦の音を作る（さわりのビリつきを少し足す） */
-function pluckBuffer(c: AudioContext, f: number): AudioBuffer {
+function pluckBuffer(c: BaseAudioContext, f: number): AudioBuffer {
   const key = `${c.sampleRate}:${f.toFixed(2)}`;
   const hit = pluckCache.get(key);
   if (hit) return hit;
@@ -82,8 +100,8 @@ function pluckBuffer(c: AudioContext, f: number): AudioBuffer {
   return buf;
 }
 
-export function playShamisen(midi: number, opts: { when?: number; gain?: number; dest?: AudioNode; a4?: number } = {}): Voice {
-  const { ctx: c, master: m } = audio();
+export function playShamisen(midi: number, opts: PlayOpts = {}): Voice {
+  const { c, out: m } = target(opts);
   const t = opts.when ?? c.currentTime;
   const f = freq(midi, opts.a4 ?? 440);
   const src = c.createBufferSource();
@@ -100,7 +118,7 @@ export function playShamisen(midi: number, opts: { when?: number; gain?: number;
   const g = c.createGain();
   const vol = (opts.gain ?? 0.8) * 0.9;
   g.gain.setValueAtTime(vol, t);
-  src.connect(body).connect(lp).connect(g).connect(opts.dest ?? m);
+  src.connect(body).connect(lp).connect(g).connect(m);
 
   // 撥が皮を打つ音
   const click = c.createBufferSource();
@@ -112,7 +130,7 @@ export function playShamisen(midi: number, opts: { when?: number; gain?: number;
   const cg = c.createGain();
   cg.gain.setValueAtTime(vol * 0.5, t);
   cg.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-  click.connect(hp).connect(cg).connect(opts.dest ?? m);
+  click.connect(hp).connect(cg).connect(m);
   click.start(t, Math.random());
   click.stop(t + 0.05);
 
@@ -135,22 +153,19 @@ export function playShamisen(midi: number, opts: { when?: number; gain?: number;
 
 // ---------------- 尺八 ----------------
 
-let fluteWave: PeriodicWave | null = null;
-
-export function playShakuhachi(midi: number, opts: { when?: number; gain?: number; dest?: AudioNode; a4?: number } = {}): Voice {
-  const { ctx: c, master: m } = audio();
+export function playShakuhachi(midi: number, opts: PlayOpts = {}): Voice {
+  const { c, out: dest } = target(opts);
   const t = opts.when ?? c.currentTime;
   const f = freq(midi, opts.a4 ?? 440);
   const vol = (opts.gain ?? 0.8) * 0.55;
-  const dest = opts.dest ?? m;
-
-  if (!fluteWave || (fluteWave as unknown as { _ctx?: AudioContext })._ctx !== c) {
+  let wave = fluteWaves.get(c);
+  if (!wave) {
     const harm = [0, 1, 0.42, 0.16, 0.09, 0.04, 0.025, 0.012];
-    fluteWave = c.createPeriodicWave(new Float32Array(harm.length), new Float32Array(harm));
-    (fluteWave as unknown as { _ctx?: AudioContext })._ctx = c;
+    wave = c.createPeriodicWave(new Float32Array(harm.length), new Float32Array(harm));
+    fluteWaves.set(c, wave);
   }
   const osc = c.createOscillator();
-  osc.setPeriodicWave(fluteWave);
+  osc.setPeriodicWave(wave);
   // 吹き始めは少し低いところから音程が上がる
   osc.frequency.setValueAtTime(f * Math.pow(2, -35 / 1200), t);
   osc.frequency.exponentialRampToValueAtTime(f, t + 0.09);
@@ -210,6 +225,6 @@ export function playShakuhachi(midi: number, opts: { when?: number; gain?: numbe
   };
 }
 
-export function playNote(inst: Instrument, midi: number, opts: { when?: number; gain?: number; dest?: AudioNode; a4?: number } = {}): Voice {
+export function playNote(inst: Instrument, midi: number, opts: PlayOpts = {}): Voice {
   return inst === 'shamisen' ? playShamisen(midi, opts) : playShakuhachi(midi, opts);
 }

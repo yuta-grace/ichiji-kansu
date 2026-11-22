@@ -1459,3 +1459,126 @@ input[type='range'] {
 .play-summary:hover {
   background: var(--sc);
 }
+
+/* 楽譜作成：音の長さ・編集の帯 */
+.dur-group {
+  display: inline-flex;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.dur-btn {
+  height: 32px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid var(--outline);
+  background: none;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dur-btn:first-child {
+  border-left: 0;
+}
+.dur-btn.on {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+.bar-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--outline-variant);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+.slot.selected {
+  background: color-mix(in srgb, var(--tertiary) 18%, transparent);
+}
+.busy {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--inverse-surface);
+  color: var(--inverse-on-surface);
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+/* 五線譜 */
+.score.staff {
+  padding: 8px;
+}
+.staff-line {
+  position: relative;
+  display: flex;
+  margin-bottom: 8px;
+}
+.staff-labels {
+  position: relative;
+  flex-shrink: 0;
+}
+.staff-label {
+  position: absolute;
+  left: 0;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  overflow: hidden;
+}
+.staff-label.editing {
+  font-weight: 700;
+}
+.staff-label.muted {
+  opacity: 0.45;
+}
+.staff-svg {
+  cursor: pointer;
+  min-width: 0;
+}
+.staff-svg svg {
+  display: block;
+}
+
+/* PDF を作るときに、画面の外に描く印刷用の楽譜（いつも白い紙・黒い字） */
+.pdf-stage {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 760px;
+  background: #fff;
+  color: #000;
+  --paper: #fff;
+  --ink: #000;
+  --on-surface-variant: #555;
+  padding: 0;
+}
+.pdf-stage .score {
+  border: 0;
+}
+.pdf-head {
+  padding: 4px 8px 8px;
+}
+.pdf-stage .score.vertical {
+  flex-wrap: wrap-reverse;
+  width: 760px;
+}
+
+/* マスの位置はカーソルで示すので、ボタンのフォーカス枠は出さない */
+.slot:focus-visible {
+  outline: none;
+}
+
+.score-toolbar .field select {
+  min-width: 100px;
+  padding-left: 10px;
+}
+.score-toolbar .title-btn {
+  flex: 1 1 auto;
+}

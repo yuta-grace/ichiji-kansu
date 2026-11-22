@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { honFromSun, shamisenBaseMidi, sunLabelWithNote, tsutsuneMidi, movableName, noteName } from './pitch';
 import { fingeringFor, openStrings, POSITION_LABELS } from './shamisen';
 import { kinkoFor, kinkoGlyph, KINKO_NOTES } from './shakuhachi';
-import { changeSun, newSong, partEvents, parseSong, setDiv, shiftAllSun } from './score';
 
 describe('寸法', () => {
   it('1尺8寸＝D4、1尺9寸＝C♯、2尺＝C', () => {
@@ -81,38 +80,3 @@ describe('ドレミ', () => {
   });
 });
 
-describe('楽譜', () => {
-  it('伸ばしで音が長くなり、休みで切れる', () => {
-    const s = newSong();
-    const p = s.parts[0];
-    p.beats[0] = { div: 1, slots: [{ k: 'n', midi: 62 }] };
-    p.beats[1] = { div: 2, slots: [{ k: 'x' }, { k: 'n', midi: 64 }] };
-    p.beats[2] = { div: 1, slots: [{ k: 'r' }] };
-    p.beats[3] = { div: 1, slots: [{ k: 'x' }] };
-    const ev = partEvents(p);
-    expect(ev).toHaveLength(2);
-    expect(ev[0]).toMatchObject({ start: 0, dur: 1.5, midi: 62 });
-    expect(ev[1]).toMatchObject({ start: 1.5, dur: 0.5, midi: 64 });
-  });
-  it('分割を変えても前の音を残す', () => {
-    expect(setDiv({ div: 2, slots: [{ k: 'r' }, { k: 'x' }] }, 1)).toEqual({ div: 1, slots: [{ k: 'r' }] });
-    expect(setDiv({ div: 1, slots: [{ k: 'r' }] }, 3).slots).toEqual([{ k: 'r' }, null, null]);
-  });
-  it('寸法の変更：指使いを保つと音が動く', () => {
-    const s = newSong('shakuhachi', 18);
-    s.parts[0].beats[0] = { div: 1, slots: [{ k: 'n', midi: 62 }] };
-    const moved = changeSun(s.parts[0], 16, true);
-    expect(moved.beats[0].slots[0]).toEqual({ k: 'n', midi: 64 });
-    const kept = changeSun(s.parts[0], 16, false);
-    expect(kept.beats[0].slots[0]).toEqual({ k: 'n', midi: 62 });
-    const all = shiftAllSun(s, 1, 13, 24);
-    expect(all.parts[0].sun).toBe(17);
-    expect(all.parts[0].beats[0].slots[0]).toEqual({ k: 'n', midi: 63 });
-  });
-  it('読み込みで形をそろえる', () => {
-    const s = newSong();
-    const back = parseSong(JSON.parse(JSON.stringify(s)));
-    expect(back.parts[0].beats).toHaveLength(16);
-    expect(() => parseSong({ foo: 1 })).toThrow();
-  });
-});

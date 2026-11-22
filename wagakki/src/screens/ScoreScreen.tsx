@@ -2,33 +2,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context';
 import { Player } from '../audio/player';
+import { renderWav } from '../audio/render';
 import { InstrumentPanel } from '../components/InstrumentPanel';
 import { InstrumentSelect, SunSelect, TuningSelect } from '../components/controls';
-import { Button, Dialog, IconButton, Segmented, Switch } from '../components/ui';
+import { Button, Dialog, IconButton, Segmented, Select, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
 import { SUN_MAX, SUN_MIN, sunLabel } from '../lib/pitch';
 import {
   changeSun,
+  eventAt,
+  extendAt,
+  insertTime,
+  isNote,
   MAX_PARTS,
+  measureLen,
   newPart,
   newSong,
   normalize,
   parseSong,
   partEvents,
-  setDiv,
+  pasteAt,
+  placed,
+  PPQ,
+  removeTime,
   shiftAllSun,
-  totalBeats,
-  type Div,
+  sliceEvents,
+  songLen,
+  writeAt,
+  type Ev,
   type Instrument,
   type Part,
-  type Slot,
   type Song,
 } from '../lib/score';
-import { currentSongId, deleteSong, loadSongs, saveSong } from '../lib/storage';
-import { PART_COLORS, ScoreView, type Cursor } from './ScoreView';
-
-/** claude.ai の非公開ページとして動いているか（ファイル保存・印刷ができない） */
-const ON_CLAUDE_PAGE = import.meta.env.VITE_CLAUDE_PAGE === '1';
+import { buildMidi, buildMusicXml } from '../lib/exporters';
+import { buildPdf, ON_CLAUDE_PAGE, safeName, saveFile, type SaveResult } from '../lib/save';
+import { currentSongId, deleteSong, loadSongs, saveSong, type Settings } from '../lib/storage';
+import { PART_COLORS, ScoreView, type Cursor, type ScoreNotation, type Selection } from './ScoreView';
 
 function initialSong(): Song {
   const id = currentSongId();
@@ -36,19 +45,48 @@ function initialSong(): Song {
   return songs.find((s) => s.id === id) ?? songs[0] ?? newSong();
 }
 
+// 音の長さ（1拍＝480）
+const BASES: { v: number; label: string; key: string }[] = [
+  { v: 1920, label: '4拍', key: '5' },
+  { v: 960, label: '2拍', key: '4' },
+  { v: 480, label: '1拍', key: '3' },
+  { v: 240, label: '½拍', key: '2' },
+  { v: 120, label: '¼拍', key: '1' },
+];
+
+const HISTORY = 200;
+
+type ExportKind = 'midi' | 'xml' | 'wav' | 'pdf' | 'json';
+
 export function ScoreScreen() {
-  const { settings, toast } = useApp();
+  const { settings, update, toast } = useApp();
   const [song, setSong] = useState<Song>(initialSong);
   const [editIdx, setEditIdx] = useState(0);
-  const [cursor, setCursor] = useState<Cursor>({ part: 0, beat: 0, slot: 0 });
+  const [cursor, setCursor] = useState<Cursor>({ part: 0, t: 0 });
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [anchor, setAnchor] = useState<number | null>(0);
+  const [rangeMode, setRangeMode] = useState(false);
+  const [base, setBase] = useState(480);
+  const [dotted, setDotted] = useState(false);
+  const [triplet, setTriplet] = useState(false);
   const [playBeat, setPlayBeat] = useState<number | null>(null);
+  const [loop, setLoop] = useState(false);
   const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add'>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [pdfStage, setPdfStage] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const player = useRef(new Player());
+  const past = useRef<Song[]>([]);
+  const future = useRef<Song[]>([]);
+  const clip = useRef<Ev[] | null>(null);
+  const [, bump] = useState(0); // 元に戻す・やり直しのボタンの状態を描き直す
 
   const edit = song.parts[editIdx] ?? song.parts[0];
+  const notation: ScoreNotation =
+    settings.scoreView === 'auto' ? (edit.instrument === 'shamisen' ? 'bunka' : 'kinko') : settings.scoreView;
+  const dur = Math.round(base * (dotted ? 1.5 : 1) * (triplet ? 2 / 3 : 1));
 
-  // 自動保存
+  // ---- 保存 ----
   const latest = useRef(song);
   const dirty = useRef(false);
   useEffect(() => {
@@ -60,8 +98,8 @@ export function ScoreScreen() {
     }, 400);
     return () => clearTimeout(t);
   }, [song]);
-  // 画面を切り替えたり閉じたりしたときも、保存していない変更を残す
   useEffect(() => {
+    const p = player.current;
     const flush = () => {
       if (dirty.current) saveSong(latest.current);
       dirty.current = false;
@@ -70,56 +108,156 @@ export function ScoreScreen() {
     return () => {
       window.removeEventListener('pagehide', flush);
       flush();
+      p.stop();
     };
   }, []);
 
-  useEffect(() => () => player.current.stop(), []);
+  // ---- 変更と履歴 ----
+  const commit = useCallback((next: Song) => {
+    past.current.push(latest.current);
+    if (past.current.length > HISTORY) past.current.shift();
+    future.current = [];
+    const n = normalize({ ...next, updatedAt: Date.now() });
+    latest.current = n;
+    setSong(n);
+    bump((x) => x + 1);
+  }, []);
+  const mutate = useCallback((f: (s: Song) => Song) => commit(f(latest.current)), [commit]);
 
-  const mutate = useCallback((f: (s: Song) => Song) => setSong((s) => normalize({ ...f(s), updatedAt: Date.now() })), []);
+  const restore = (s: Song) => {
+    latest.current = s;
+    setSong(s);
+    setEditIdx((i) => Math.min(i, s.parts.length - 1));
+    setCursor((c) => ({ part: Math.min(c.part, s.parts.length - 1), t: Math.min(c.t, songLen(s) - 1) }));
+    setSelection(null);
+    bump((x) => x + 1);
+  };
+  const undo = () => {
+    const prev = past.current.pop();
+    if (!prev) return;
+    future.current.push(latest.current);
+    restore(prev);
+  };
+  const redo = () => {
+    const next = future.current.pop();
+    if (!next) return;
+    past.current.push(latest.current);
+    restore(next);
+  };
 
-  const updatePart = (idx: number, f: (p: Part) => Part) =>
-    mutate((s) => ({ ...s, parts: s.parts.map((p, i) => (i === idx ? f(p) : p)) }));
+  const setPartEvents = (s: Song, pi: number, events: Ev[]): Song => ({
+    ...s,
+    parts: s.parts.map((p, i) => (i === pi ? { ...p, events } : p)),
+  });
+
+  /** 曲の終わりを超えるなら小節を足す */
+  const grow = (s: Song, end: number): Song => {
+    if (end < songLen(s)) return s;
+    return normalize({ ...s, measures: Math.ceil((end + 1) / measureLen(s)) });
+  };
 
   // ---- カーソル ----
-  const step = (c: Cursor, dir: 1 | -1, s: Song = song): Cursor => {
-    const p = s.parts[c.part];
-    const b = p.beats[c.beat];
+  const stepFrom = (pi: number, t: number, dir: 1 | -1): number => {
+    const ps = placed(latest.current.parts[pi].events);
     if (dir === 1) {
-      if (c.slot + 1 < b.div) return { ...c, slot: c.slot + 1 };
-      return { ...c, beat: c.beat + 1, slot: 0 };
+      const next = ps.find((p) => p.start > t);
+      return Math.min(next ? next.start : Infinity, t + dur, songLen(latest.current) - 1);
     }
-    if (c.slot > 0) return { ...c, slot: c.slot - 1 };
-    if (c.beat === 0) return c;
-    return { ...c, beat: c.beat - 1, slot: p.beats[c.beat - 1].div - 1 };
+    const prev = [...ps].reverse().find((p) => p.start < t);
+    return Math.max(prev ? prev.start : 0, t - dur, 0);
   };
 
-  const putSlot = (value: Slot, advance = true) => {
-    const c = cursor;
-    let next = song;
-    next = {
-      ...next,
-      parts: next.parts.map((p, i) =>
-        i !== c.part
-          ? p
-          : { ...p, beats: p.beats.map((b, bi) => (bi !== c.beat ? b : { ...b, slots: b.slots.map((x, si) => (si === c.slot ? value : x)) })) },
-      ),
-    };
-    let nc = advance ? step(c, 1, next) : c;
-    if (nc.beat >= totalBeats(next)) {
-      next = normalize({ ...next, measures: next.measures + 1 });
+  const rangeEnd = (pi: number, t: number) => {
+    const e = eventAt(latest.current.parts[pi].events, t);
+    return e ? e.start + e.dur : t + dur;
+  };
+
+  const select = (pi: number, t: number, extend: boolean) => {
+    const samePart = pi === cursor.part;
+    if (pi !== editIdx) setEditIdx(pi);
+    if ((extend || rangeMode) && samePart && anchor !== null) {
+      setSelection({ part: pi, a: Math.min(anchor, t), b: rangeEnd(pi, Math.max(anchor, t)) });
+    } else {
+      setAnchor(t);
+      setSelection(rangeMode ? { part: pi, a: t, b: rangeEnd(pi, t) } : null);
     }
-    setSong({ ...normalize(next), updatedAt: Date.now() });
-    setCursor(nc);
+    setCursor({ part: pi, t });
   };
 
-  const onNote = (midi: number, str?: number) => {
-    if (cursor.part !== editIdx) setCursor((c) => ({ ...c, part: editIdx }));
-    putSlot(edit.instrument === 'shamisen' && str !== undefined ? { k: 'n', midi, str } : { k: 'n', midi });
+  // ---- 入力 ----
+  const writeHere = (ev: Omit<Ev, 'dur'>, extend = false) => {
+    const pi = editIdx;
+    const t = cursor.part === pi ? cursor.t : 0;
+    let s = grow(latest.current, t + dur);
+    const evs = s.parts[pi].events;
+    s = setPartEvents(s, pi, extend ? extendAt(evs, t, dur) : writeAt(evs, t, dur, ev));
+    commit(grow(s, t + dur));
+    setSelection(null);
+    setAnchor(t + dur);
+    setCursor({ part: pi, t: t + dur });
   };
 
-  const setBeatDiv = (div: Div) => {
-    updatePart(cursor.part, (p) => ({ ...p, beats: p.beats.map((b, i) => (i === cursor.beat ? setDiv(b, div) : b)) }));
-    setCursor((c) => ({ ...c, slot: Math.min(c.slot, div - 1) }));
+  const onNote = (midi: number, str?: number) =>
+    writeHere(edit.instrument === 'shamisen' && str !== undefined ? { midi, str } : { midi });
+
+  /** 選んだ範囲（なければカーソルの音）を休みにする */
+  const clearHere = () => {
+    const pi = cursor.part;
+    const evs = latest.current.parts[pi].events;
+    if (selection && selection.part === pi) {
+      commit(setPartEvents(latest.current, pi, writeAt(evs, selection.a, selection.b - selection.a, {})));
+      return;
+    }
+    const e = eventAt(evs, cursor.t);
+    if (e && isNote(e)) commit(setPartEvents(latest.current, pi, writeAt(evs, e.start, e.dur, {})));
+  };
+
+  const copy = (cut: boolean) => {
+    const pi = cursor.part;
+    const evs = latest.current.parts[pi].events;
+    let range: { a: number; b: number } | null = selection && selection.part === pi ? selection : null;
+    if (!range) {
+      const e = eventAt(evs, cursor.t);
+      range = e ? { a: e.start, b: e.start + e.dur } : null;
+    }
+    if (!range) return;
+    clip.current = sliceEvents(evs, range.a, range.b);
+    if (cut) commit(setPartEvents(latest.current, pi, writeAt(evs, range.a, range.b - range.a, {})));
+    toast(cut ? '切り取りました' : 'コピーしました');
+  };
+
+  const paste = () => {
+    if (!clip.current) {
+      toast('先にコピーしてください');
+      return;
+    }
+    const pi = editIdx;
+    const t = cursor.t;
+    const len = clip.current.reduce((a, e) => a + e.dur, 0);
+    let s = grow(latest.current, t + len);
+    s = setPartEvents(s, pi, pasteAt(s.parts[pi].events, t, clip.current));
+    commit(s);
+    setSelection(null);
+    setCursor({ part: pi, t: Math.min(t + len, songLen(s) - 1) });
+  };
+
+  const insertMeasure = () => {
+    const s = latest.current;
+    const mLen = measureLen(s);
+    const at = Math.floor(cursor.t / mLen) * mLen;
+    commit({ ...s, measures: s.measures + 1, parts: s.parts.map((p) => ({ ...p, events: insertTime(p.events, at, mLen) })) });
+    toast(`${at / mLen + 1}小節目の前に1小節入れました`);
+  };
+
+  const deleteMeasure = () => {
+    const s = latest.current;
+    if (s.measures <= 1) return;
+    const mLen = measureLen(s);
+    const at = Math.floor(cursor.t / mLen) * mLen;
+    commit({ ...s, measures: s.measures - 1, parts: s.parts.map((p) => ({ ...p, events: removeTime(p.events, at, at + mLen) })) });
+    setCursor((c) => ({ ...c, t: Math.max(0, Math.min(at, songLen(s) - mLen - 1)) }));
+    setSelection(null);
+    toast(`${at / mLen + 1}小節目を消しました`);
   };
 
   // ---- 再生 ----
@@ -130,27 +268,31 @@ export function ScoreScreen() {
       setPlayBeat(null);
       return;
     }
-    const from = cursor.beat >= totalBeats(song) - 1 ? 0 : cursor.beat;
+    const total = songLen(song) / PPQ;
+    const from = cursor.t / PPQ >= total - 0.01 ? 0 : cursor.t / PPQ;
     let last = -1;
     player.current.start(
       song,
       from,
       settings.a4,
       (b) => {
-        if (b === null) return setPlayBeat(null);
-        const q = Math.floor(b * 12) / 12; // 描き直しを減らす
+        if (b === null) {
+          setPlayBeat(null);
+          return;
+        }
+        const q = Math.floor(b * 12) / 12;
         if (q !== last) {
           last = q;
           setPlayBeat(q);
         }
       },
+      loop,
     );
   };
   useEffect(() => {
     song.parts.forEach((p) => player.current.setPart(p.id, p.volume, p.muted));
   }, [song.parts]);
 
-  // 再生中に編集中のパートで鳴っている音
   const sounding = useMemo(() => {
     const s = new Set<number>();
     if (playBeat === null || !edit) return s;
@@ -158,35 +300,109 @@ export function ScoreScreen() {
     return s;
   }, [playBeat, edit]);
 
+  // ---- 書き出し ----
+  const report = (r: SaveResult, what: string) => {
+    if (r === 'saved') toast(`${what}を保存しました`);
+    else if (r === 'declined') toast('保存をやめました');
+    else toast('この画面では保存できませんでした');
+  };
+  const exportAs = async (kind: ExportKind) => {
+    const name = safeName(song.title);
+    try {
+      if (kind === 'midi') report(await saveFile(`${name}.mid`, buildMidi(song)), 'MIDI');
+      else if (kind === 'xml') report(await saveFile(`${name}.musicxml`, buildMusicXml(song)), 'MusicXML');
+      else if (kind === 'json') report(await saveFile(`${name}.wagakki.json`, JSON.stringify(song)), '楽譜ファイル');
+      else if (kind === 'wav') {
+        setBusy('WAV を作っています…');
+        const wav = await renderWav(song, settings.a4);
+        setBusy(null);
+        report(await saveFile(`${name}.wav`, wav), 'WAV');
+      } else {
+        setBusy('PDF を作っています…');
+        setPdfStage(true);
+      }
+    } catch (e) {
+      setBusy(null);
+      toast(e instanceof Error ? e.message : '書き出せませんでした');
+    }
+  };
+  // PDF：画面の外に印刷用の楽譜を描いてから画像にする
+  const stageRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef({ notation, title: song.title });
+  exportRef.current = { notation, title: song.title };
+  useEffect(() => {
+    if (!pdfStage) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const root = stageRef.current!;
+        for (let i = 0; i < 100 && !root.querySelector('[data-block]'); i++) await new Promise((r) => setTimeout(r, 100));
+        await document.fonts.ready;
+        await new Promise((r) => setTimeout(r, 250));
+        const pdf = await buildPdf(root, exportRef.current.notation === 'kinko');
+        if (cancelled) return;
+        setPdfStage(false);
+        setBusy(null);
+        report(await saveFile(`${safeName(exportRef.current.title)}.pdf`, pdf), 'PDF');
+      } catch (e) {
+        setPdfStage(false);
+        setBusy(null);
+        toast(e instanceof Error ? e.message : 'PDF を作れませんでした');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfStage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---- キーボード ----
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     const t = e.target as HTMLElement;
-    if (t.closest('input, textarea, select, dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (t.closest('input, textarea, select, dialog')) return;
     const k = e.key;
-    const handled = () => e.preventDefault();
-    if (k === 'ArrowRight') (handled(), setCursor((c) => step(c, 1)));
-    else if (k === 'ArrowLeft') (handled(), setCursor((c) => step(c, -1)));
-    else if (k === 'ArrowDown' || k === 'ArrowUp') {
-      handled();
+    const mod = e.metaKey || e.ctrlKey;
+    const done = () => e.preventDefault();
+    if (mod) {
+      const lk = k.toLowerCase();
+      if (lk === 'z' && !e.shiftKey) (done(), undo());
+      else if ((lk === 'z' && e.shiftKey) || lk === 'y') (done(), redo());
+      else if (lk === 'c') (done(), copy(false));
+      else if (lk === 'x') (done(), copy(true));
+      else if (lk === 'v') (done(), paste());
+      return;
+    }
+    if (e.altKey) return;
+    if (k === 'ArrowRight' || k === 'ArrowLeft') {
+      done();
+      select(cursor.part, stepFrom(cursor.part, cursor.t, k === 'ArrowRight' ? 1 : -1), e.shiftKey);
+    } else if (k === 'ArrowDown' || k === 'ArrowUp') {
+      done();
       const n = Math.max(0, Math.min(song.parts.length - 1, cursor.part + (k === 'ArrowDown' ? 1 : -1)));
       setEditIdx(n);
-      setCursor((c) => ({ ...c, part: n, slot: Math.min(c.slot, song.parts[n].beats[c.beat].div - 1) }));
-    } else if (k === '-' || k === 'ー') (handled(), putSlot({ k: 'x' }));
-    else if (k === '.' || k === '0') (handled(), putSlot({ k: 'r' }));
-    else if (k === 'Delete') (handled(), putSlot(null, false));
+      setSelection(null);
+      setAnchor(cursor.t);
+      setCursor({ part: n, t: cursor.t });
+    } else if (k === '-' || k === 'ー') (done(), writeHere({}, true));
+    else if (k === '0' || k === 'r') (done(), writeHere({}));
+    else if (k === 'Delete') (done(), clearHere());
     else if (k === 'Backspace') {
-      handled();
-      const prev = step(cursor, -1);
-      setCursor(prev);
-      mutate((s) => ({
-        ...s,
-        parts: s.parts.map((p, i) =>
-          i !== prev.part ? p : { ...p, beats: p.beats.map((b, bi) => (bi !== prev.beat ? b : { ...b, slots: b.slots.map((x, si) => (si === prev.slot ? null : x)) })) },
-        ),
-      }));
-    } else if (k === ' ') (handled(), togglePlay());
-    else if (['1', '2', '3', '4'].includes(k)) (handled(), setBeatDiv(Number(k) as Div));
+      done();
+      const prev = stepFrom(cursor.part, cursor.t, -1);
+      const evs = latest.current.parts[cursor.part].events;
+      const ev = eventAt(evs, prev);
+      setCursor({ part: cursor.part, t: prev });
+      if (ev && isNote(ev)) commit(setPartEvents(latest.current, cursor.part, writeAt(evs, ev.start, ev.dur, {})));
+    } else if (k === ' ') (done(), togglePlay());
+    else if (k === '.') (done(), setDotted((d) => !d));
+    else if (k === ',') (done(), setTriplet((d) => !d));
+    else if (k === 'Escape') {
+      setSelection(null);
+      setRangeMode(false);
+    } else {
+      const b = BASES.find((x) => x.key === k);
+      if (b) (done(), setBase(b.v));
+    }
   };
   useEffect(() => {
     const f = (e: KeyboardEvent) => keyRef.current(e);
@@ -194,12 +410,12 @@ export function ScoreScreen() {
     return () => window.removeEventListener('keydown', f);
   }, []);
 
-  const curBeat = song.parts[cursor.part]?.beats[cursor.beat];
+  const viewProps = { song, notation, editIdx };
 
   return (
     <div className="screen score-screen">
       <div className="toolbar score-toolbar">
-        <IconButton icon="folder" label="曲（新規・開く・書き出し・印刷）" onClick={() => setDlg('files')} />
+        <IconButton icon="folder" label="曲（新規・開く・書き出し）" onClick={() => setDlg('files')} />
         <button type="button" className="title-btn" onClick={() => setDlg('song')}>
           <span className="song-title">{song.title}</span>
           <span className="song-meta">
@@ -207,6 +423,18 @@ export function ScoreScreen() {
           </span>
         </button>
         <span className="spacer" />
+        <Select<Settings['scoreView']>
+          label="表示する楽譜"
+          value={settings.scoreView}
+          onChange={(v) => update({ scoreView: v })}
+          options={[
+            { value: 'auto', label: '自動' },
+            { value: 'bunka', label: '文化譜' },
+            { value: 'kinko', label: '琴古譜' },
+            { value: 'staff', label: '五線譜' },
+          ]}
+        />
+        <IconButton icon="loop" label="くり返し再生" variant="outlined" selected={loop} onClick={() => setLoop((l) => !l)} />
         <IconButton icon={playing ? 'stop' : 'play'} label={playing ? '停止（スペース）' : 'カーソルから再生（スペース）'} variant="filled" onClick={togglePlay} />
       </div>
 
@@ -221,7 +449,8 @@ export function ScoreScreen() {
               onClick={() => {
                 if (i === editIdx) setDlg('part');
                 setEditIdx(i);
-                setCursor((c) => ({ ...c, part: i, slot: Math.min(c.slot, p.beats[c.beat].div - 1) }));
+                setSelection(null);
+                setCursor((c) => ({ part: i, t: c.t }));
               }}
             >
               <span className="swatch" style={{ background: PART_COLORS[i % PART_COLORS.length] }} />
@@ -236,7 +465,7 @@ export function ScoreScreen() {
               className="part-chip-mute"
               aria-label={p.muted ? `${p.name}の消音を解除` : `${p.name}を消音`}
               aria-pressed={p.muted}
-              onClick={() => updatePart(i, (x) => ({ ...x, muted: !x.muted }))}
+              onClick={() => mutate((s) => ({ ...s, parts: s.parts.map((x, j) => (j === i ? { ...x, muted: !x.muted } : x)) }))}
             >
               <Icon name={p.muted ? 'volumeOff' : 'volumeOn'} size={18} />
             </button>
@@ -251,55 +480,91 @@ export function ScoreScreen() {
       </div>
 
       <div className="score-scroll">
-        <ScoreView
-          song={song}
-          editIdx={editIdx}
-          cursor={cursor}
-          playBeat={playBeat}
-          onSelect={(c) => {
-            setCursor(c);
-            setEditIdx(c.part);
-          }}
-        />
+        <ScoreView {...viewProps} cursor={cursor} selection={selection} playBeat={playBeat} onSelect={select} />
       </div>
 
       <div className={`input-dock${panelOpen ? '' : ' closed'}`}>
         <div className="edit-bar">
-          <IconButton icon="left" label="前へ（←）" onClick={() => setCursor((c) => step(c, -1))} />
-          <IconButton icon="right" label="次へ（→）" onClick={() => setCursor((c) => step(c, 1))} />
-          <button type="button" className="chip-btn" onClick={() => putSlot({ k: 'r' })} title="休み（. キー）">
+          <span className="edit-bar-label">長さ</span>
+          <div className="dur-group" role="radiogroup" aria-label="音の長さ">
+            {BASES.map((b) => (
+              <button
+                key={b.v}
+                type="button"
+                role="radio"
+                aria-checked={base === b.v}
+                className={`dur-btn${base === b.v ? ' on' : ''}`}
+                onClick={() => setBase(b.v)}
+                title={`${b.label}（${b.key} キー）`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" className={`chip-btn${dotted ? ' on' : ''}`} aria-pressed={dotted} onClick={() => setDotted((d) => !d)} title="付点（. キー）">
+            付点
+          </button>
+          <button type="button" className={`chip-btn${triplet ? ' on' : ''}`} aria-pressed={triplet} onClick={() => setTriplet((d) => !d)} title="3連符（, キー）">
+            3連
+          </button>
+          <span className="spacer" />
+          <IconButton icon={panelOpen ? 'expand' : 'collapse'} label={panelOpen ? '楽器の画面を隠す' : '楽器の画面を出す'} onClick={() => setPanelOpen((o) => !o)} />
+        </div>
+        <div className="edit-bar">
+          <IconButton icon="left" label="前へ（←）" onClick={() => select(cursor.part, stepFrom(cursor.part, cursor.t, -1), false)} />
+          <IconButton icon="right" label="次へ（→）" onClick={() => select(cursor.part, stepFrom(cursor.part, cursor.t, 1), false)} />
+          <button type="button" className="chip-btn" onClick={() => writeHere({})} title="休み（0 キー）">
             ○ 休み
           </button>
-          <button type="button" className="chip-btn" onClick={() => putSlot({ k: 'x' })} title="伸ばし（- キー）">
+          <button type="button" className="chip-btn" onClick={() => writeHere({}, true)} title="伸ばし（- キー）">
             ー 伸ばし
           </button>
-          <IconButton icon="backspace" label="消す（Delete）" onClick={() => putSlot(null, false)} />
-          <span className="edit-bar-label">拍の分割</span>
-          <Segmented<Div>
-            dense
-            label="拍の分割"
-            value={curBeat?.div ?? 1}
-            onChange={setBeatDiv}
-            options={[1, 2, 3, 4].map((d) => ({ value: d as Div, label: String(d) }))}
-          />
-          <span className="spacer" />
-          <IconButton
-            icon={panelOpen ? 'expand' : 'collapse'}
-            label={panelOpen ? '楽器の画面を隠す' : '楽器の画面を出す'}
-            onClick={() => setPanelOpen((o) => !o)}
-          />
+          <IconButton icon="backspace" label="消す（Delete）" onClick={clearHere} />
+          <span className="bar-sep" />
+          <IconButton icon="undo" label="元に戻す（Ctrl+Z）" onClick={undo} disabled={!past.current.length} />
+          <IconButton icon="redo" label="やり直す（Ctrl+Shift+Z）" onClick={redo} disabled={!future.current.length} />
+          <span className="bar-sep" />
+          <button
+            type="button"
+            className={`chip-btn${rangeMode ? ' on' : ''}`}
+            aria-pressed={rangeMode}
+            onClick={() => {
+              setRangeMode((m) => !m);
+              setSelection(null);
+              setAnchor(cursor.t);
+            }}
+            title="範囲を選ぶ（Shift を押しながら選んでも同じ）"
+          >
+            範囲
+          </button>
+          <IconButton icon="copy" label="コピー（Ctrl+C）" onClick={() => copy(false)} />
+          <IconButton icon="cut" label="切り取り（Ctrl+X）" onClick={() => copy(true)} />
+          <IconButton icon="paste" label="貼り付け（Ctrl+V）" onClick={paste} />
+          <span className="bar-sep" />
+          <button type="button" className="chip-btn" onClick={insertMeasure} title="カーソルのある小節の前に1小節入れる">
+            小節＋
+          </button>
+          <button type="button" className="chip-btn" onClick={deleteMeasure} title="カーソルのある小節を消す">
+            小節−
+          </button>
         </div>
         {panelOpen && edit && (
           <InstrumentPanel instrument={edit.instrument} sun={edit.sun} tuning={edit.tuning} external={sounding} onNote={onNote} volume={edit.volume} />
         )}
       </div>
 
+      {busy && (
+        <div className="busy" role="status">
+          {busy}
+        </div>
+      )}
+
       <PartDialog
         open={dlg === 'part'}
         part={edit}
         canDelete={song.parts.length > 1}
         onClose={() => setDlg(null)}
-        onChange={(f) => updatePart(editIdx, f)}
+        onChange={(f) => mutate((s) => ({ ...s, parts: s.parts.map((p, i) => (i === editIdx ? f(p) : p)) }))}
         onDelete={() => {
           mutate((s) => ({ ...s, parts: s.parts.filter((_, i) => i !== editIdx) }));
           setEditIdx(0);
@@ -313,9 +578,10 @@ export function ScoreScreen() {
         defaults={edit}
         onAdd={(inst, sun, tuning) => {
           const n = song.parts.length;
-          mutate((s) => ({ ...s, parts: [...s.parts, newPart(inst, sun, tuning, totalBeats(s), `${inst === 'shamisen' ? '三味線' : '尺八'}${n + 1}`)] }));
+          mutate((s) => ({ ...s, parts: [...s.parts, newPart(inst, sun, tuning, songLen(s), `${inst === 'shamisen' ? '三味線' : '尺八'}${n + 1}`)] }));
           setEditIdx(n);
-          setCursor((c) => ({ ...c, part: n, slot: 0 }));
+          setCursor({ part: n, t: 0 });
+          setAnchor(0);
           setDlg(null);
         }}
       />
@@ -327,20 +593,37 @@ export function ScoreScreen() {
         onOpen={(s) => {
           player.current.stop();
           setPlayBeat(null);
-          setSong(s);
+          past.current = [];
+          future.current = [];
+          restore(s);
           setEditIdx(0);
-          setCursor({ part: 0, beat: 0, slot: 0 });
+          setCursor({ part: 0, t: 0 });
           setDlg(null);
+        }}
+        onExport={(k) => {
+          setDlg(null);
+          void exportAs(k);
         }}
         toast={toast}
       />
       <div className="print-only">
         <h1 className="print-title">{song.title}</h1>
         <p className="print-meta">
-          ♩={song.tempo}　{song.beatsPerMeasure}拍子　{edit.instrument === 'shamisen' ? '文化譜（三味線）' : '琴古譜（尺八）'}の表記
+          ♩={song.tempo}　{song.beatsPerMeasure}拍子
         </p>
-        <ScoreView song={song} editIdx={editIdx} cursor={null} playBeat={null} onSelect={() => {}} printMode />
+        <ScoreView {...viewProps} cursor={null} selection={null} playBeat={null} onSelect={() => {}} printMode />
       </div>
+      {pdfStage && (
+        <div className="pdf-stage" ref={stageRef} aria-hidden="true">
+          <div data-head className="pdf-head">
+            <h1 className="print-title">{song.title}</h1>
+            <p className="print-meta">
+              ♩={song.tempo}　{song.beatsPerMeasure}拍子
+            </p>
+          </div>
+          <ScoreView {...viewProps} cursor={null} selection={null} playBeat={null} onSelect={() => {}} printMode />
+        </div>
+      )}
     </div>
   );
 }
@@ -368,7 +651,7 @@ function PartDialog({
     <Dialog open={open} title="パートの設定" onClose={onClose} actions={<Button onClick={onClose}>閉じる</Button>}>
       <label className="field">
         <span className="field-label">名前</span>
-        <input value={part.name} maxLength={20} onChange={(e) => onChange((p) => ({ ...p, name: e.target.value }))} />
+        <input id="part-name" value={part.name} maxLength={20} onChange={(e) => onChange((p) => ({ ...p, name: e.target.value }))} />
       </label>
       <div className="field-row">
         <span className="field-label">楽器</span>
@@ -393,7 +676,7 @@ function PartDialog({
       )}
       <label className="field">
         <span className="field-label">音量 {Math.round(part.volume * 100)}</span>
-        <input type="range" min={0} max={1} step={0.05} value={part.volume} onChange={(e) => onChange((p) => ({ ...p, volume: Number(e.target.value) }))} />
+        <input id="part-volume" type="range" min={0} max={1} step={0.05} value={part.volume} onChange={(e) => onChange((p) => ({ ...p, volume: Number(e.target.value) }))} />
       </label>
       <Switch label="消音" checked={part.muted} onChange={(v) => onChange((p) => ({ ...p, muted: v }))} />
       {canDelete && (
@@ -464,8 +747,7 @@ function SongDialog({
   toast: (m: string) => void;
 }) {
   const shift = (steps: number) => {
-    const blocked = song.parts.some((p) => p.sun - steps < SUN_MIN || p.sun - steps > SUN_MAX);
-    if (blocked) {
+    if (song.parts.some((p) => p.sun - steps < SUN_MIN || p.sun - steps > SUN_MAX)) {
       toast('寸法の範囲（1尺3寸〜2尺4寸）を超えるパートがあるため変えられません');
       return;
     }
@@ -476,11 +758,11 @@ function SongDialog({
     <Dialog open={open} title="曲の設定" onClose={onClose} actions={<Button onClick={onClose}>閉じる</Button>}>
       <label className="field">
         <span className="field-label">曲名</span>
-        <input value={song.title} maxLength={40} onChange={(e) => mutate((s) => ({ ...s, title: e.target.value }))} />
+        <input id="song-title" value={song.title} maxLength={40} onChange={(e) => mutate((s) => ({ ...s, title: e.target.value }))} />
       </label>
       <label className="field">
         <span className="field-label">テンポ（1分間の拍数）{song.tempo}</span>
-        <input type="range" min={30} max={240} value={song.tempo} onChange={(e) => mutate((s) => ({ ...s, tempo: Number(e.target.value) }))} />
+        <input id="song-tempo" type="range" min={30} max={240} value={song.tempo} onChange={(e) => mutate((s) => ({ ...s, tempo: Number(e.target.value) }))} />
       </label>
       <div className="field-row">
         <span className="field-label">拍子</span>
@@ -488,7 +770,7 @@ function SongDialog({
           dense
           label="拍子"
           value={song.beatsPerMeasure}
-          onChange={(v) => mutate((s) => ({ ...s, beatsPerMeasure: v, measures: Math.max(1, Math.ceil(totalBeats(s) / v)) }))}
+          onChange={(v) => mutate((s) => ({ ...s, beatsPerMeasure: v, measures: Math.max(1, Math.ceil(songLen(s) / (v * PPQ))) }))}
           options={[2, 3, 4].map((v) => ({ value: v, label: `${v}拍` }))}
         />
       </div>
@@ -497,10 +779,10 @@ function SongDialog({
         <Button variant="outlined" onClick={() => mutate((s) => ({ ...s, measures: Math.max(1, s.measures - 1) }))}>
           −1
         </Button>
-        <Button variant="outlined" onClick={() => mutate((s) => ({ ...s, measures: Math.min(200, s.measures + 1) }))}>
+        <Button variant="outlined" onClick={() => mutate((s) => ({ ...s, measures: Math.min(400, s.measures + 1) }))}>
           ＋1
         </Button>
-        <Button variant="outlined" onClick={() => mutate((s) => ({ ...s, measures: Math.min(200, s.measures + 4) }))}>
+        <Button variant="outlined" onClick={() => mutate((s) => ({ ...s, measures: Math.min(400, s.measures + 4) }))}>
           ＋4
         </Button>
       </div>
@@ -523,12 +805,14 @@ function FilesDialog({
   song,
   onClose,
   onOpen,
+  onExport,
   toast,
 }: {
   open: boolean;
   song: Song;
   onClose: () => void;
   onOpen: (s: Song) => void;
+  onExport: (kind: ExportKind) => void;
   toast: (m: string) => void;
 }) {
   const [list, setList] = useState<Song[]>([]);
@@ -552,7 +836,6 @@ function FilesDialog({
     }
   };
 
-  // claude.ai のページではファイルを保存できないので、楽譜の文字をコピーする
   const copyText = async () => {
     const text = JSON.stringify(song);
     try {
@@ -562,15 +845,6 @@ function FilesDialog({
       setPasted(text);
       toast('コピーできなかったので、下の欄の文字を選んでコピーしてください');
     }
-  };
-
-  const exportFile = () => {
-    const blob = new Blob([JSON.stringify(song, null, 1)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${song.title || 'score'}.wagakki.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
   return (
@@ -586,18 +860,18 @@ function FilesDialog({
         >
           新しい曲
         </Button>
-        {ON_CLAUDE_PAGE ? (
-          <Button icon="download" variant="tonal" onClick={copyText}>
-            楽譜をコピー
-          </Button>
-        ) : (
-          <Button icon="download" variant="tonal" onClick={exportFile}>
-            ファイルに書き出し
-          </Button>
-        )}
         <Button icon="upload" variant="tonal" onClick={() => fileRef.current?.click()}>
           ファイルから読み込み
         </Button>
+        {ON_CLAUDE_PAGE ? (
+          <Button icon="copy" variant="tonal" onClick={copyText}>
+            楽譜をコピー
+          </Button>
+        ) : (
+          <Button icon="download" variant="tonal" onClick={() => onExport('json')}>
+            楽譜ファイルに保存
+          </Button>
+        )}
         {!ON_CLAUDE_PAGE && (
           <Button
             icon="print"
@@ -607,7 +881,7 @@ function FilesDialog({
               setTimeout(() => window.print(), 150);
             }}
           >
-            印刷・PDF
+            印刷
           </Button>
         )}
         <input
@@ -618,11 +892,31 @@ function FilesDialog({
           onChange={async (e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (!f) return;
-            importText(await f.text());
+            if (f) importText(await f.text());
           }}
         />
       </div>
+
+      <h3 className="list-title">書き出し</h3>
+      <div className="file-actions">
+        <Button icon="download" variant="outlined" onClick={() => onExport('pdf')}>
+          PDF
+        </Button>
+        <Button icon="download" variant="outlined" onClick={() => onExport('midi')}>
+          MIDI
+        </Button>
+        <Button icon="download" variant="outlined" onClick={() => onExport('wav')}>
+          WAV（音）
+        </Button>
+        <Button icon="download" variant="outlined" onClick={() => onExport('xml')}>
+          MusicXML
+        </Button>
+      </div>
+      <p className="hint">
+        PDF はいま表示している楽譜で作ります。MusicXML は MuseScore や JapoScore で開けます。
+        {ON_CLAUDE_PAGE && ' このページでは、MIDI・WAV・MusicXML は zip にまとめて保存します。'}
+      </p>
+
       {ON_CLAUDE_PAGE && (
         <label className="field">
           <span className="field-label">コピーした楽譜の文字を貼り付けて読み込む</span>
@@ -634,6 +928,7 @@ function FilesDialog({
           </span>
         </label>
       )}
+
       <h3 className="list-title">保存した曲（自動で保存されます）</h3>
       <ul className="song-list">
         {list.map((s) => (
@@ -644,8 +939,8 @@ function FilesDialog({
                 {s.parts.length}パート・{s.measures}小節・{new Date(s.updatedAt).toLocaleString('ja-JP')}
               </span>
             </button>
-            {s.id !== song.id && (
-              armedId === s.id ? (
+            {s.id !== song.id &&
+              (armedId === s.id ? (
                 <Button
                   variant="filled"
                   onClick={() => {
@@ -658,8 +953,7 @@ function FilesDialog({
                 </Button>
               ) : (
                 <IconButton icon="delete" label={`「${s.title}」を削除`} onClick={() => setArmedId(s.id)} />
-              )
-            )}
+              ))}
           </li>
         ))}
       </ul>

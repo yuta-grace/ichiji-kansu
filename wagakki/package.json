@@ -11,8 +11,11 @@
     "build:page": "tsc --noEmit && vite build -c vite.page.config.ts && node tools/inline-page.mjs"
   },
   "dependencies": {
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vexflow": "^4.2.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

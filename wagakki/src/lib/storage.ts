@@ -10,6 +10,8 @@ export interface Settings {
   /** 文化譜の3本の線のうち、上の線がどの糸か */
   bunkaTop: 'san' | 'ichi';
   showPiano: boolean;
+  /** 楽譜の表記：auto＝編集中のパートの楽器に合わせる */
+  scoreView: 'auto' | 'bunka' | 'kinko' | 'staff';
   /** 'auto'：見つかった琴古フォント、'kana'：カタカナ、それ以外：フォント名 */
   kinkoFont: string;
   theme: 'system' | 'light' | 'dark';
@@ -27,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shamisenLabel: 'sun',
   bunkaTop: 'san',
   showPiano: true,
+  scoreView: 'auto',
   kinkoFont: 'auto',
   theme: 'system',
   instrument: 'shamisen',
