@@ -40,10 +40,14 @@ import {
   writeAt,
   type Ev,
   type Instrument,
+  type JumpKind,
+  type MeasureMarks,
   type Part,
   type Song,
 } from '../lib/score';
 import { buildMidi, buildMusicXml } from '../lib/exporters';
+import { playOrder } from '../lib/playorder';
+import { JUMP_LABEL, setMarks } from '../lib/marks';
 import { buildPdf, ON_CLAUDE_PAGE, safeName, saveFile, type SaveResult } from '../lib/save';
 import { currentSongId, deleteSong, loadSongs, saveSong, type Settings } from '../lib/storage';
 import { PART_COLORS, ScoreView, type Cursor, type ScoreNotation, type Selection } from './ScoreView';
@@ -116,7 +120,7 @@ export function ScoreScreen() {
   const [playBeat, setPlayBeat] = useState<number | null>(null);
   const [loop, setLoop] = useState(false);
   // 初めて開いたとき（保存した曲がない）は、楽器を選ぶところから始める
-  const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add' | 'new'>(() => (loadSongs().length ? null : 'new'));
+  const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add' | 'new' | 'marks'>(() => (loadSongs().length ? null : 'new'));
   const [panelOpen, setPanelOpen] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [pdfStage, setPdfStage] = useState(false);
@@ -481,6 +485,7 @@ export function ScoreScreen() {
     .filter(Boolean)
     .join('　');
   const showParts = settings.multiPart || song.parts.length > 1;
+  const order = playOrder(song);
 
   const durTools = (
     <div className="tool-group" role="radiogroup" aria-label="音の長さ">
@@ -534,6 +539,7 @@ export function ScoreScreen() {
       <div className="tool-group">
         <Tool icon="measureAdd" label="カーソルのある小節の前に1小節入れる" onClick={insertMeasure} />
         <Tool icon="measureDel" label="カーソルのある小節を消す" onClick={deleteMeasure} />
+        <Tool icon="repeat" label="繰り返し・ジャンプの記号（カーソルのある小節）" active={dlg === 'marks'} onClick={() => setDlg('marks')} />
       </div>
     </>
   );
@@ -659,6 +665,11 @@ export function ScoreScreen() {
         </span>
         <span>長さ {tupletAt(edit.tuplets, cursor.t) ? '3連の中（1/3ずつ）' : durText}</span>
         {selection && <span>範囲選択中</span>}
+        {order.warnings.length > 0 && (
+          <button type="button" className="status-warn" onClick={() => setDlg('marks')}>
+            記号の注意 {order.warnings.length}
+          </button>
+        )}
         <span className="spacer" />
         <span className="hide-narrow">
           {song.beatsPerMeasure}拍子・{song.measures}小節
@@ -698,6 +709,14 @@ export function ScoreScreen() {
           setAnchor(0);
           setDlg(null);
         }}
+      />
+      <MarksDialog
+        open={dlg === 'marks'}
+        song={song}
+        measure={curMeasure - 1}
+        order={order}
+        onClose={() => setDlg(null)}
+        onChange={(patch) => mutate((s) => setMarks(s, curMeasure - 1, patch))}
       />
       <SongDialog open={dlg === 'song'} song={song} onClose={() => setDlg(null)} mutate={mutate} toast={toast} />
       <FilesDialog
@@ -947,6 +966,121 @@ const NEW_HINT: Record<Instrument, string> = {
   shakuhachi: '琴古流の縦譜で書きます。五線譜にも切り替えられます。',
   shamisen: '文化譜（津軽の勘所の数字）で書きます。五線譜にも切り替えられます。',
 };
+
+const ENDINGS: { key: string; nums: number[] | null; label: string }[] = [
+  { key: '-', nums: null, label: 'なし' },
+  { key: '1', nums: [1], label: '1.' },
+  { key: '2', nums: [2], label: '2.' },
+  { key: '3', nums: [3], label: '3.' },
+  { key: '1,2', nums: [1, 2], label: '1.2.' },
+];
+
+/** 小節の記号（繰り返し・番括弧・ジャンプ） */
+function MarksDialog({
+  open,
+  song,
+  measure,
+  order,
+  onClose,
+  onChange,
+}: {
+  open: boolean;
+  song: Song;
+  measure: number;
+  order: ReturnType<typeof playOrder>;
+  onClose: () => void;
+  onChange: (patch: Partial<MeasureMarks>) => void;
+}) {
+  const mk: MeasureMarks = song.marks[measure] ?? {};
+  const endingKey = mk.ending ? mk.ending.numbers.join(',') : '-';
+  const preview = order.measures.slice(0, 48).map((m) => m + 1);
+  return (
+    <Dialog open={open} title={`${measure + 1}小節目の記号`} onClose={onClose} actions={<Button onClick={onClose}>閉じる</Button>}>
+      <div className="field-row">
+        <span className="field-label">繰り返し</span>
+        <button type="button" className={`chip-btn${mk.repeatStart ? ' on' : ''}`} aria-pressed={!!mk.repeatStart} onClick={() => onChange({ repeatStart: !mk.repeatStart })}>
+          ‖: 始まり（頭）
+        </button>
+      </div>
+      <div className="field-row">
+        <span className="field-label">:‖ 終わり（終わり）</span>
+        <Segmented<number>
+          dense
+          label="繰り返しの終わり"
+          value={mk.repeatEnd ?? 0}
+          onChange={(v) => onChange({ repeatEnd: v || undefined })}
+          options={[
+            { value: 0, label: 'なし' },
+            { value: 2, label: '2回' },
+            { value: 3, label: '3回' },
+            { value: 4, label: '4回' },
+          ]}
+        />
+      </div>
+      <div className="field-row">
+        <span className="field-label">番括弧（ここから）</span>
+        <Segmented<string>
+          dense
+          label="番括弧"
+          value={endingKey}
+          onChange={(k) => {
+            const e = ENDINGS.find((x) => x.key === k)!;
+            onChange({ ending: e.nums ? { numbers: e.nums, length: mk.ending?.length ?? 1 } : undefined });
+          }}
+          options={ENDINGS.map((e) => ({ value: e.key, label: e.label }))}
+        />
+      </div>
+      {mk.ending && (
+        <div className="field-row">
+          <span className="field-label">括弧の長さ</span>
+          <Segmented<number>
+            dense
+            label="括弧の長さ"
+            value={mk.ending.length}
+            onChange={(v) => onChange({ ending: { numbers: mk.ending!.numbers, length: v } })}
+            options={[1, 2, 3, 4].map((v) => ({ value: v, label: `${v}小節` }))}
+          />
+        </div>
+      )}
+      <div className="field-row">
+        <span className="field-label">目印（頭）</span>
+        <button type="button" className={`chip-btn${mk.segno ? ' on' : ''}`} aria-pressed={!!mk.segno} onClick={() => onChange({ segno: !mk.segno })}>
+          <span className="music-glyph">𝄋</span> セーニョ
+        </button>
+        <button type="button" className={`chip-btn${mk.coda ? ' on' : ''}`} aria-pressed={!!mk.coda} onClick={() => onChange({ coda: !mk.coda })}>
+          <span className="music-glyph">𝄌</span> コーダ
+        </button>
+      </div>
+      <div className="field-row">
+        <span className="field-label">終わりに書く</span>
+        <button type="button" className={`chip-btn${mk.toCoda ? ' on' : ''}`} aria-pressed={!!mk.toCoda} onClick={() => onChange({ toCoda: !mk.toCoda })}>
+          To Coda
+        </button>
+        <button type="button" className={`chip-btn${mk.fine ? ' on' : ''}`} aria-pressed={!!mk.fine} onClick={() => onChange({ fine: !mk.fine })}>
+          Fine
+        </button>
+      </div>
+      <Select<JumpKind | ''>
+        label="戻る指示（小節の終わり）"
+        value={mk.jump ?? ''}
+        onChange={(v) => onChange({ jump: v || undefined })}
+        options={[{ value: '', label: 'なし' }, ...(Object.keys(JUMP_LABEL) as JumpKind[]).map((k) => ({ value: k, label: JUMP_LABEL[k] }))]}
+      />
+      {order.warnings.length > 0 && (
+        <ul className="warn-list">
+          {order.warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+      <p className="hint">
+        演奏の順番：{preview.join(' → ')}
+        {order.measures.length > preview.length ? ' …' : ''}
+      </p>
+      <p className="hint">D.C.・D.S. で戻ったあとは繰り返しを省き、番括弧は最後の括弧だけを弾きます。</p>
+    </Dialog>
+  );
+}
 
 function SongDialog({
   open,

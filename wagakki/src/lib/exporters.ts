@@ -3,6 +3,7 @@ import { measureItems, spell, type NoteValue } from './notation';
 import { measureLen, PPQ, type Part, type Song } from './score';
 import { instrumentDef } from './instruments';
 import { perfNotes, playOrder } from './playorder';
+import { JUMP_LABEL, measureDecor } from './marks';
 
 // ---------------- MIDI（Standard MIDI File, format 1） ----------------
 
@@ -95,6 +96,19 @@ function partXml(song: Song, p: Part, pi: number): string {
         );
       }
     }
+    // 小節の頭の記号（繰り返しの始まり・番括弧の始まり・セーニョ・コーダ）
+    const mk = song.marks[m] ?? {};
+    const d = measureDecor(song, m);
+    if (mk.repeatStart || (d.volta && d.volta.start)) {
+      out.push('      <barline location="left">');
+      if (mk.repeatStart) out.push('        <bar-style>heavy-light</bar-style>', '        <repeat direction="forward"/>');
+      if (d.volta?.start && mk.ending) out.push(`        <ending number="${mk.ending.numbers.join(', ')}" type="start">${esc(d.volta.label)}</ending>`);
+      out.push('      </barline>');
+    }
+    if (pi === 0) {
+      if (mk.segno) out.push('      <direction placement="above"><direction-type><segno/></direction-type><sound segno="s1"/></direction>');
+      if (mk.coda) out.push('      <direction placement="above"><direction-type><coda/></direction-type><sound coda="c1"/></direction>');
+    }
     const { items, tuplets } = measureItems(p.events, m * mLen, mLen, p.tuplets);
     items.forEach((it, ii) => {
       const tStart = tuplets.find((g) => g.first === ii);
@@ -124,10 +138,36 @@ function partXml(song: Song, p: Part, pi: number): string {
       n.push('      </note>');
       out.push(...n);
     });
+    // 小節の終わりの記号（Fine・To Coda・D.C. など、繰り返しの終わり・番括弧の終わり）
+    if (pi === 0) {
+      if (mk.toCoda) out.push('      <direction placement="above"><direction-type><words>To Coda</words></direction-type><sound tocoda="c1"/></direction>');
+      if (mk.fine) out.push('      <direction placement="above"><direction-type><words>Fine</words></direction-type><sound fine="yes"/></direction>');
+      if (mk.jump) {
+        const snd = mk.jump.startsWith('DS') ? 'dalsegno="s1"' : 'dacapo="yes"';
+        out.push(`      <direction placement="above"><direction-type><words>${JUMP_LABEL[mk.jump]}</words></direction-type><sound ${snd}/></direction>`);
+      }
+    }
+    const endingHere = d.volta?.end ? endingStartingBefore(song, m) : null;
+    if (mk.repeatEnd || endingHere) {
+      out.push('      <barline location="right">');
+      if (mk.repeatEnd) out.push('        <bar-style>light-heavy</bar-style>');
+      if (endingHere) out.push(`        <ending number="${endingHere.join(', ')}" type="${mk.repeatEnd ? 'stop' : 'discontinue'}"/>`);
+      if (mk.repeatEnd) out.push(`        <repeat direction="backward"${mk.repeatEnd > 2 ? ` times="${mk.repeatEnd}"` : ''}/>`);
+      out.push('      </barline>');
+    }
     out.push('    </measure>');
   }
   out.push('  </part>');
   return out.join('\n');
+}
+
+/** m 小節目で終わる番括弧の番号 */
+function endingStartingBefore(song: Song, m: number): number[] | null {
+  for (let s = m; s >= 0; s--) {
+    const e = song.marks[s]?.ending;
+    if (e) return s + e.length - 1 === m ? e.numbers : null;
+  }
+  return null;
 }
 
 export function buildMusicXml(song: Song): string {

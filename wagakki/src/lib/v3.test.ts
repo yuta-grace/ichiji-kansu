@@ -182,3 +182,25 @@ describe('前の形式からの読み込み', () => {
     expect(back.instrument).toBe('piano');
   });
 });
+
+describe('記号の書き出し', () => {
+  it('MusicXML に繰り返し・番括弧・ジャンプが入り、MIDI は展開される', async () => {
+    const { buildMidi } = await import('./exporters');
+    const s = newSong('piano');
+    s.parts[0].events = writeAt(s.parts[0].events, 0, Q, { midi: 60 });
+    s.marks = { 0: { repeatStart: true, segno: true }, 1: { ending: { numbers: [1], length: 1 }, repeatEnd: 2 }, 2: { ending: { numbers: [2], length: 1 }, fine: true }, 3: { jump: 'DSalFine' } };
+    const x = buildMusicXml(s);
+    expect(x).toContain('<repeat direction="forward"/>');
+    expect(x).toContain('<repeat direction="backward"/>');
+    expect(x).toContain('<ending number="1" type="start">1.</ending>');
+    expect(x).toContain('<ending number="1" type="stop"/>');
+    expect(x).toContain('<ending number="2" type="discontinue"/>');
+    expect(x).toContain('<segno/>');
+    expect(x).toContain('dalsegno="s1"');
+    // 1 2 1 3 4 | 1 3（D.S. al Fine → セーニョ（1小節目）から Fine（3小節目）まで）
+    expect(playOrder(s).measures.map((m) => m + 1)).toEqual([1, 2, 1, 3, 4, 1, 3]);
+    const midi = buildMidi(s);
+    // 1小節目のド（60）は3回鳴る
+    expect([...midi].filter((b, i) => b === 0x90 && midi[i + 1] === 60).length).toBe(3);
+  });
+});

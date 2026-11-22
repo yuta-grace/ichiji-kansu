@@ -1815,3 +1815,169 @@ input[type='range'] {
 .inst-card.on .inst-card-name {
   color: var(--accent);
 }
+
+/* 記号 */
+.music-glyph {
+  font-family: 'Noto Music', 'Bravura Text', 'Segoe UI Symbol', 'Apple Symbols', serif;
+  font-size: 16px;
+  line-height: 1;
+}
+.warn-list {
+  margin: 0;
+  padding: 8px 10px 8px 26px;
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.3);
+  border-radius: var(--r);
+  color: var(--danger);
+  font-size: var(--fs-s);
+}
+.status-warn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--danger);
+  text-decoration: underline;
+}
+
+/* ---- 繰り返し・ジャンプの記号（文化譜・琴古譜） ---- */
+.measure {
+  position: relative;
+}
+.measure-num {
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 2px 2px;
+  white-space: nowrap;
+}
+.measure-num-spacer {
+  height: 20px;
+}
+.m-left {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+.m-left .music-glyph {
+  font-size: 15px;
+  color: var(--ink);
+}
+.m-right {
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rep-times {
+  font-size: 10px;
+  color: var(--ink);
+}
+.volta {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  height: 8px;
+  border-top: 1px solid var(--ink);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 0 0 4px;
+  color: var(--ink);
+}
+.volta.start {
+  border-left: 1px solid var(--ink);
+  left: 0;
+}
+.volta.end {
+  right: 2px;
+}
+.measure.rep-start {
+  border-left-width: 3px;
+}
+.measure.rep-end {
+  border-right: 3px solid var(--ink);
+}
+.rep-dots {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  --dot: radial-gradient(circle, var(--ink) 1.7px, transparent 2px);
+}
+.row .rep-dots {
+  top: 30%;
+  height: 40%;
+  width: 5px;
+  background: var(--dot) top / 5px 5px no-repeat, var(--dot) bottom / 5px 5px no-repeat;
+}
+.row .rep-dots.start {
+  left: -2px;
+}
+.row .rep-dots.end {
+  right: -2px;
+}
+.vmeasure {
+  position: relative;
+}
+.vmeasure.rep-start {
+  border-top-width: 3px;
+}
+.vmeasure.rep-end {
+  border-bottom: 3px solid var(--ink);
+}
+.vmeasure .rep-dots {
+  left: 30%;
+  width: 40%;
+  height: 5px;
+  background: var(--dot) left / 5px 5px no-repeat, var(--dot) right / 5px 5px no-repeat;
+}
+.vmeasure .rep-dots.start {
+  top: 2px;
+}
+.vmeasure .rep-dots.end {
+  bottom: 2px;
+}
+.vnum {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.vnum.in-volta {
+  border-left: 1px solid var(--ink);
+}
+.vnum.volta-start {
+  border-top: 1px solid var(--ink);
+}
+.vmark {
+  font-size: 10px;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.vmark.music-glyph {
+  font-size: 14px;
+}
+.vtext {
+  writing-mode: vertical-rl;
+  font-style: italic;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vnums {
+  width: 22px;
+}
+.measure-num,
+.measure-num-spacer {
+  height: 26px;
+}
+.volta {
+  height: 10px;
+}
+@media (min-width: 900px) and (max-height: 920px) {
+  .tool {
+    height: 26px;
+  }
+}

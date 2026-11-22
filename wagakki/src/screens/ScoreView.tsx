@@ -8,6 +8,7 @@ import { beatGrid, lastNoteEnd, type GridSlot } from '../lib/notation';
 import { PPQ, type Part, type Song } from '../lib/score';
 import { KinkoText } from '../components/KinkoText';
 import { StaffView } from './StaffView';
+import { measureDecor, type Decor } from '../lib/marks';
 
 export type ScoreNotation = 'bunka' | 'kinko' | 'staff';
 
@@ -91,12 +92,16 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
               </div>
             ))}
           </div>
-          {ms.map((m) => (
-            <div className="measure" key={m} style={{ width: measureW }}>
-              <div className="measure-num">{m + 1}</div>
+          {ms.map((m) => {
+            const d = measureDecor(song, m);
+            return (
+            <div className={`measure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} key={m} style={{ width: measureW }}>
+              <MeasureHead m={m} d={d} />
               {song.parts.map((p, pi) => (
                 <div key={p.id} className={`row shamisen${p.muted ? ' muted' : ''}`}>
                   <div className="bunka-lines" aria-hidden="true" />
+                  {d.repStart && <span className="rep-dots start" aria-hidden="true" />}
+                  {d.repEnd > 0 && <span className="rep-dots end" aria-hidden="true" />}
                   {Array.from({ length: bpm }, (_, bi) => {
                     const beat = m * bpm + bi;
                     return (
@@ -120,9 +125,26 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
                 </div>
               ))}
             </div>
-          ))}
+            );
+          })}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** 小節の上の帯：小節番号・セーニョ・コーダ・番括弧・終わりの指示 */
+function MeasureHead({ m, d }: { m: number; d: Decor }) {
+  return (
+    <div className="measure-num">
+      {d.volta && <span className={`volta${d.volta.start ? ' start' : ''}${d.volta.end ? ' end' : ''}`}>{d.volta.start ? d.volta.label : ''}</span>}
+      <span className="m-left">
+        {m + 1}
+        {d.segno && <span className="music-glyph" title="セーニョ">𝄋</span>}
+        {d.coda && <span className="music-glyph" title="コーダ">𝄌</span>}
+        {d.repEnd > 2 && <span className="rep-times">×{d.repEnd}</span>}
+      </span>
+      {d.right.length > 0 && <span className="m-right">{d.right.join('　')}</span>}
     </div>
   );
 }
@@ -168,11 +190,19 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
         <div className="vsystem" key={li} data-line={li} data-block>
           <div className="vnums" aria-hidden="true">
             <div style={{ height: HEAD_H }} />
-            {ms.map((m) => (
-              <div key={m} className="vnum" style={{ height: measureH }}>
-                {m + 1}
-              </div>
-            ))}
+            {ms.map((m) => {
+              const d = measureDecor(song, m);
+              return (
+                <div key={m} className={`vnum${d.volta ? ' in-volta' : ''}${d.volta?.start ? ' volta-start' : ''}`} style={{ height: measureH }}>
+                  <span>{m + 1}</span>
+                  {d.volta?.start && <span className="vmark">{d.volta.label}</span>}
+                  {d.segno && <span className="music-glyph vmark">𝄋</span>}
+                  {d.coda && <span className="music-glyph vmark">𝄌</span>}
+                  {d.repEnd > 2 && <span className="vmark">×{d.repEnd}</span>}
+                  {d.right.length > 0 && <span className="vmark vtext">{d.right.join('　')}</span>}
+                </div>
+              );
+            })}
           </div>
           {song.parts.map((p, pi) => (
             <div key={p.id} className={`vcol${pi === editIdx ? ' editing' : ''}${p.muted ? ' muted' : ''}`}>
@@ -180,8 +210,12 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
                 <span className="swatch" style={{ background: PART_COLORS[pi % PART_COLORS.length] }} />
                 <span className="vhead-text">{p.name || `パート${pi + 1}`}</span>
               </div>
-              {ms.map((m) => (
-                <div key={m} className="vmeasure" style={{ height: measureH }}>
+              {ms.map((m) => {
+                const d = measureDecor(song, m);
+                return (
+                <div key={m} className={`vmeasure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} style={{ height: measureH }}>
+                  {d.repStart && <span className="rep-dots start" aria-hidden="true" />}
+                  {d.repEnd > 0 && <span className="rep-dots end" aria-hidden="true" />}
                   {Array.from({ length: bpm }, (_, bi) => {
                     const beat = m * bpm + bi;
                     return (
@@ -204,7 +238,8 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </div>

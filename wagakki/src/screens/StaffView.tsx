@@ -4,10 +4,21 @@ import { loadVexFlow, type VexFlow } from '../lib/libs';
 import { measureItems, spell, type Item } from '../lib/notation';
 import { measureLen, type Song } from '../lib/score';
 import { instrumentDef } from '../lib/instruments';
+import { measureDecor } from '../lib/marks';
+import type { JumpKind } from '../lib/score';
+
+const JUMP_REP: Record<JumpKind, 'DC' | 'DC_AL_FINE' | 'DC_AL_CODA' | 'DS' | 'DS_AL_FINE' | 'DS_AL_CODA'> = {
+  DC: 'DC',
+  DCalFine: 'DC_AL_FINE',
+  DCalCoda: 'DC_AL_CODA',
+  DS: 'DS',
+  DSalFine: 'DS_AL_FINE',
+  DSalCoda: 'DS_AL_CODA',
+};
 import { PART_COLORS, type ViewProps } from './ScoreView';
 
 const STAFF_H = 96; // 1段の高さ
-const TOP = 18;
+const TOP = 34; // 番括弧・セーニョ・D.C. などを書く余白
 const LABEL_W = 64;
 
 interface Hit {
@@ -154,6 +165,23 @@ function StaffLine({
         const stave = new vf.Stave(x, y, w);
         if (mi === 0) stave.addClef('treble', 'default', shamisen ? '8vb' : undefined);
         if (m === 0) stave.addTimeSignature(`${song.beatsPerMeasure}/4`);
+        // 繰り返し・番括弧・ジャンプの記号（文字の記号は一番上のパートだけに書く）
+        const d = measureDecor(song, m);
+        if (d.repStart) stave.setBegBarType(vf.BarlineType.REPEAT_BEGIN);
+        if (d.repEnd) stave.setEndBarType(vf.BarlineType.REPEAT_END);
+        if (pi === 0) {
+          if (d.volta) {
+            const vt = d.volta.start && d.volta.end ? vf.VoltaType.BEGIN_END : d.volta.start ? vf.VoltaType.BEGIN : d.volta.end ? vf.VoltaType.END : vf.VoltaType.MID;
+            stave.setVoltaType(vt, d.volta.start ? d.volta.label : '', 0);
+          }
+          const R = vf.Repetition.type;
+          if (d.segno) stave.setRepetitionType(R.SEGNO_LEFT, 0);
+          if (d.coda) stave.setRepetitionType(R.CODA_LEFT, 0);
+          const mk = song.marks[m] ?? {};
+          if (mk.toCoda) stave.setRepetitionType(R.TO_CODA, 0);
+          if (mk.fine) stave.setRepetitionType(R.FINE, 0);
+          if (mk.jump) stave.setRepetitionType(R[JUMP_REP[mk.jump]], 0);
+        }
         stave.setContext(ctx).draw();
         const { items, tuplets } = measureItems(p.events, m * mLen, mLen, p.tuplets);
         const notes = items.map((it) => makeNote(vf, it, shamisen));

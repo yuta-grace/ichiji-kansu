@@ -7,7 +7,7 @@ const html = `<title>三味線・尺八 和楽器</title>
 <meta name="theme-color" content="#415f91">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600&family=Noto+Music&display=swap">
 <style>
 html, body { height: 100%; }
 ${css}
