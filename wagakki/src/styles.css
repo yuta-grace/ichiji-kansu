@@ -2681,3 +2681,47 @@ body {
     padding: 0 2px;
   }
 }
+/* 4分・2分音符の3連：下線は引かず「3」だけ */
+.beat-bar.bars0 {
+  background: none;
+}
+/* 読み替え：1音だけの文化譜 */
+.bunka-mini {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 36px;
+  background:
+    linear-gradient(currentColor, currentColor) 0 25% / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 50% / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 75% / 100% 1px no-repeat;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.bunka-mini.small {
+  width: 28px;
+  height: 24px;
+  opacity: 0.6;
+}
+.bunka-mini-num {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+  /* 楽譜と同じく、数字の後ろの線を消す */
+  background: var(--cell-bg, var(--paper));
+  padding: 1px 2px;
+}
+.read-table.across td.lit { --cell-bg: linear-gradient(var(--play-weak), var(--play-weak)), var(--paper); }
+.readout-cell { --cell-bg: var(--panel); }
+.bunka-mini.small .bunka-mini-num {
+  font-size: 11px;
+}
+.bunka-mini-num.on-line0 { top: 25%; }
+.bunka-mini-num.on-line1 { top: 50%; }
+.bunka-mini-num.on-line2 { top: 75%; }

@@ -18,20 +18,23 @@ export interface BeatGrid {
 }
 
 const DIVS = [1, 2, 3, 4, 6, 8, 12];
+const GROUP_DIVS = [1, 2, 3, 4, 6, 8, 12, 16, 24];
 
 /**
  * 1拍を、音の始まりと終わりが全部マスの境目に来るいちばん少ない数に割る。
  * 休みは、そのパートの最後の音より後ろなら書かない（空欄）。
  */
-export function beatGrid(events: Ev[], beatStart: number, lastNoteEnd: number): BeatGrid {
-  const beatEnd = beatStart + PPQ;
+export function beatGrid(events: Ev[], beatStart: number, lastNoteEnd: number, beats = 1): BeatGrid {
+  const L = PPQ * beats;
+  const beatEnd = beatStart + L;
   const ps = placed(events);
   const cuts: number[] = [];
   for (const p of ps) {
     for (const x of [p.start, p.start + p.dur]) if (x > beatStart && x < beatEnd) cuts.push(x - beatStart);
   }
-  const div = DIVS.find((d) => cuts.every((c) => (c * d) % PPQ === 0)) ?? 8;
-  const len = PPQ / div;
+  const divs = beats === 1 ? DIVS : GROUP_DIVS;
+  const div = divs.find((d) => cuts.every((c) => (c * d) % L === 0)) ?? divs[divs.length - 1];
+  const len = L / div;
   const slots: GridSlot[] = [];
   for (let i = 0; i < div; i++) {
     const t = beatStart + Math.round(i * len);
@@ -44,6 +47,45 @@ export function beatGrid(events: Ev[], beatStart: number, lastNoteEnd: number): 
     slots.push({ t, len, kind, ev: p ? { dur: p.dur, midi: p.midi, str: p.str } : undefined });
   }
   return { div, slots };
+}
+
+export interface BeatGroup {
+  /** 小節の中の何拍目から */
+  first: number;
+  /** 何拍分まとめるか（2拍以上にまたがる3連符は、まとめて1つのマス割りにする） */
+  beats: number;
+}
+
+/**
+ * 小節の拍のまとまり。拍の頭から始まって拍の頭で終わる、2拍以上の3連符（4分音符・2分音符の3連）は
+ * 1拍ずつに分けると「音・伸ばし」の繰り返しに見えてしまうので、まとめて3つのマスにする。
+ */
+export function beatGroups(tupletLists: Tuplet[][], mStart: number, bpm: number): BeatGroup[] {
+  const mEnd = mStart + bpm * PPQ;
+  const merged: [number, number][] = [];
+  for (const list of tupletLists)
+    for (const r of list) {
+      const e = r.start + r.span;
+      if (r.span <= PPQ || r.start % PPQ !== 0 || e % PPQ !== 0 || r.start < mStart || e > mEnd) continue;
+      merged.push([(r.start - mStart) / PPQ, (e - mStart) / PPQ]);
+    }
+  const out: BeatGroup[] = [];
+  let b = 0;
+  while (b < bpm) {
+    let end = b + 1;
+    // b から始まる（または b を含む）区間を、重なりも含めて広げる
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const [a, z] of merged) if (a < end && z > b && z > end) {
+        end = z;
+        grew = true;
+      }
+    }
+    out.push({ first: b, beats: end - b });
+    b = end;
+  }
+  return out;
 }
 
 export function lastNoteEnd(events: Ev[]): number {

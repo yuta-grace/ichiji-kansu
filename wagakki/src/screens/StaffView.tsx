@@ -54,7 +54,7 @@ export function StaffView({ song, editIdx, cursor, selection, playBeat, onSelect
   const labelW = song.parts.length > 1 ? LABEL_W : 0;
   // 1段の高さ。記号（番括弧・セーニョ・D.C. など）があるときだけ上に余白をとる
   const dims: Dims = { staffH: tight ? 78 : 96, top: hasMarks(song) ? 34 : tight ? 10 : 18, labelW };
-  const lines = vf ? layout(song, (printMode ? 720 : width) - labelW, tight) : [];
+  const lines = vf ? layout(song, (printMode ? 720 : width) - labelW, tight, !!printMode) : [];
 
   return (
     <div className={`score staff${printMode ? ' print' : ''}`} ref={ref}>
@@ -87,7 +87,7 @@ interface Dims {
   labelW: number;
 }
 
-function layout(song: Song, width: number, tight: boolean): { measures: number[]; widths: number[] }[] {
+function layout(song: Song, width: number, tight: boolean, evenBars = false): { measures: number[]; widths: number[] }[] {
   const mLen = measureLen(song);
   const usable = Math.max(240, width - 16);
   const base = (m: number) => {
@@ -101,6 +101,11 @@ function layout(song: Song, width: number, tight: boolean): { measures: number[]
   for (let m = 0; m < song.measures; m++) {
     const w = base(m) + (cur.length === 0 ? 70 : 0) + (m === 0 ? 30 : 0);
     if (cur.length && used + w > usable) {
+      // 書き出しでは、1行の小節の数をなるべく偶数にする（あふれた1小節は次の行の頭へ）
+      if (evenBars && cur.length > 1 && cur.length % 2 === 1) {
+        m = cur.pop()!;
+        curW.pop();
+      }
       lines.push({ measures: cur, widths: curW });
       cur = [];
       curW = [];

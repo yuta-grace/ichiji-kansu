@@ -4,7 +4,7 @@ import { useApp } from '../context';
 import { noteName } from '../lib/pitch';
 import { fingeringFor, POSITION_LABELS } from '../lib/shamisen';
 import { kinkoFor } from '../lib/shakuhachi';
-import { beatGrid, lastNoteEnd, type GridSlot } from '../lib/notation';
+import { beatGrid, beatGroups, lastNoteEnd, type BeatGroup, type GridSlot } from '../lib/notation';
 import { PPQ, type Part, type Song } from '../lib/score';
 import { KinkoText } from '../components/KinkoText';
 import { StaffView } from './StaffView';
@@ -42,45 +42,64 @@ export interface ViewProps {
  * 拍ごとの大きさを中身から決め、小節を行に詰める。行は幅いっぱいに広げる（最後の行は広げすぎない）。
  * 細かく割った拍だけ広くなるので、音の少ない小節は短くなる。
  */
-function packLines(
+export function packLines(
   song: Song,
   usable: number,
   minBeat: number,
   minSlot: number,
   ends: number[],
-): { measures: number[]; beats: number[][] }[] {
+  evenBars = false,
+): Line[] {
   const bpm = song.beatsPerMeasure;
   const sizes: number[][] = [];
+  const groups: BeatGroup[][] = [];
   for (let m = 0; m < song.measures; m++) {
-    const row: number[] = [];
-    for (let bi = 0; bi < bpm; bi++) {
-      const t = (m * bpm + bi) * PPQ;
-      const div = Math.max(...song.parts.map((p, pi) => beatGrid(p.events, t, ends[pi]).div));
-      row.push(Math.max(minBeat, div * minSlot));
-    }
-    sizes.push(row);
+    const gs = beatGroups(
+      song.parts.map((p) => p.tuplets),
+      m * bpm * PPQ,
+      bpm,
+    );
+    groups.push(gs);
+    sizes.push(
+      gs.map((g) => {
+        const t = (m * bpm + g.first) * PPQ;
+        const div = Math.max(...song.parts.map((p, pi) => beatGrid(p.events, t, ends[pi], g.beats).div));
+        return Math.max(minBeat * g.beats, div * minSlot);
+      }),
+    );
   }
   const PAD = 8;
-  const lines: { measures: number[]; beats: number[][] }[] = [];
+  const raw: number[][] = [];
   let cur: number[] = [];
   let used = 0;
+  const widthOf = (m: number) => sizes[m].reduce((a, b) => a + b, 0) + PAD;
   for (let m = 0; m < song.measures; m++) {
-    const w = sizes[m].reduce((a, b) => a + b, 0) + PAD;
+    const w = widthOf(m);
     if (cur.length && used + w > usable) {
-      lines.push({ measures: cur, beats: cur.map((x) => sizes[x]) });
-      cur = [];
-      used = 0;
+      // 書き出しでは、1行の小節の数をなるべく偶数にする（あふれた1小節は次の行へ）
+      const carry = evenBars && cur.length > 1 && cur.length % 2 === 1 ? [cur.pop()!] : [];
+      raw.push(cur);
+      cur = carry;
+      used = carry.reduce((a, x) => a + widthOf(x), 0);
     }
     cur.push(m);
     used += w;
   }
-  if (cur.length) lines.push({ measures: cur, beats: cur.map((x) => sizes[x]) });
-  return lines.map((l, li) => {
-    const sum = l.beats.flat().reduce((a, b) => a + b, 0) + l.measures.length * PAD;
-    const last = li === lines.length - 1;
-    const k = Math.max(1, Math.min(last ? 1.25 : 2.2, (usable - l.measures.length * PAD) / (sum - l.measures.length * PAD)));
-    return { measures: l.measures, beats: l.beats.map((r) => r.map((b) => Math.floor(b * k))) };
+  if (cur.length) raw.push(cur);
+  return raw.map((ms, li) => {
+    const bs = ms.map((x) => sizes[x]);
+    const sum = bs.flat().reduce((a, b) => a + b, 0);
+    const last = li === raw.length - 1;
+    const k = Math.max(1, Math.min(last ? 1.25 : 2.2, (usable - ms.length * PAD) / sum));
+    return { measures: ms, beats: bs.map((r) => r.map((b) => Math.floor(b * k))), groups: ms.map((x) => groups[x]) };
   });
+}
+
+interface Line {
+  measures: number[];
+  /** 小節ごとの、拍のまとまりの大きさ */
+  beats: number[][];
+  groups: BeatGroup[][];
 }
 
 /** 別の楽器のパートを、この表記で書くときの基準（寸法・調弦） */
@@ -120,11 +139,11 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
   const bpm = song.beatsPerMeasure;
   const usable = (printMode ? 700 : width - 28) - LABEL_W;
   const ends = song.parts.map((p) => lastNoteEnd(p.events));
-  const lines = packLines(song, usable, tight ? (narrow ? 26 : 30) : narrow ? 40 : 58, tight ? 15 : 22, ends);
+  const lines = packLines(song, usable, tight ? (narrow ? 26 : 30) : narrow ? 40 : 58, tight ? 15 : 22, ends, printMode);
 
   return (
     <div className={`score horizontal${printMode ? ' print' : ''}${tight ? ' compact' : ''}`} ref={ref}>
-      {lines.map(({ measures: ms, beats }, li) => (
+      {lines.map(({ measures: ms, beats, groups }, li) => (
         <div className="system" key={li} data-block>
           {showLabels && (
           <div className="system-labels" style={{ width: LABEL_W }}>
@@ -147,12 +166,13 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
                   <div className="bunka-lines" aria-hidden="true" />
                   {d.repStart && <span className="rep-dots start" aria-hidden="true" />}
                   {d.repEnd > 0 && <span className="rep-dots end" aria-hidden="true" />}
-                  {Array.from({ length: bpm }, (_, bi) => {
-                    const beat = m * bpm + bi;
+                  {groups[mi].map((g, gi) => {
+                    const beat = m * bpm + g.first;
                     return (
                       <BeatCell
-                        key={bi}
-                        size={beats[mi][bi]}
+                        key={g.first}
+                        size={beats[mi][gi]}
+                        beats={g.beats}
                         song={song}
                         editIdx={editIdx}
                         notation="bunka"
@@ -160,7 +180,7 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
                         pi={pi}
                         beatStart={beat * PPQ}
                         lastEnd={ends[pi]}
-                        playing={playBeat !== null && Math.floor(playBeat) === beat}
+                        playing={playBeat !== null && Math.floor(playBeat) >= beat && Math.floor(playBeat) < beat + g.beats}
                         cursor={cursor}
                         selection={selection}
                         onSelect={onSelect}
@@ -216,9 +236,11 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
   // 縦譜は行（列）の高さに小節を詰める。拍の高さは中身から決める
   const usable = (printMode ? 940 : height - 24) - HEAD_H - 24;
   // 琴古の名前（リ中メリなど）は縦に長いので、マスは文化譜より高めにとる
-  const packed = packLines(song, usable, tight ? 42 : 56, tight ? 24 : 26, ends);
+  const packed = packLines(song, usable, tight ? 42 : 56, tight ? 24 : 26, ends, printMode);
   const lines = packed.map((l) => l.measures);
-  const beatH = (m: number) => packed.find((l) => l.measures.includes(m))!.beats[packed.find((l) => l.measures.includes(m))!.measures.indexOf(m)];
+  const lineOf = (m: number) => packed.find((l) => l.measures.includes(m))!;
+  const beatH = (m: number) => lineOf(m).beats[lineOf(m).measures.indexOf(m)];
+  const groupsOf = (m: number) => lineOf(m).groups[lineOf(m).measures.indexOf(m)];
 
   // 縦譜は右から読むので、最初は右端を見せる
   useLayoutEffect(() => {
@@ -275,13 +297,14 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
                 <div key={m} className={`vmeasure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} style={{ height: beatH(m).reduce((a, b) => a + b, 0) + 1 }}>
                   {d.repStart && <span className="rep-dots start" aria-hidden="true" />}
                   {d.repEnd > 0 && <span className="rep-dots end" aria-hidden="true" />}
-                  {Array.from({ length: bpm }, (_, bi) => {
-                    const beat = m * bpm + bi;
+                  {groupsOf(m).map((g, gi) => {
+                    const beat = m * bpm + g.first;
                     return (
                       <BeatCell
-                        key={bi}
+                        key={g.first}
                         vertical
-                        size={beatH(m)[bi]}
+                        size={beatH(m)[gi]}
+                        beats={g.beats}
                         song={song}
                         editIdx={editIdx}
                         notation="kinko"
@@ -289,7 +312,7 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
                         pi={pi}
                         beatStart={beat * PPQ}
                         lastEnd={ends[pi]}
-                        playing={playBeat !== null && Math.floor(playBeat) === beat}
+                        playing={playBeat !== null && Math.floor(playBeat) >= beat && Math.floor(playBeat) < beat + g.beats}
                         cursor={cursor}
                         selection={selection}
                         onSelect={onSelect}
@@ -311,6 +334,7 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
 
 function BeatCell({
   size,
+  beats = 1,
   vertical,
   song,
   editIdx,
@@ -325,6 +349,7 @@ function BeatCell({
   onSelect,
 }: {
   size: number;
+  beats?: number;
   vertical?: boolean;
   song: Song;
   editIdx: number;
@@ -338,9 +363,12 @@ function BeatCell({
   selection: Selection | null;
   onSelect: (part: number, t: number, extend: boolean) => void;
 }) {
-  const grid = beatGrid(part.events, beatStart, lastEnd);
+  const grid = beatGrid(part.events, beatStart, lastEnd, beats);
   const ref = referenceFor(song, editIdx, notation, part);
-  const bars = grid.div === 1 ? 0 : grid.div === 2 || grid.div === 3 ? 1 : grid.div === 4 || grid.div === 6 ? 2 : 3;
+  // マスの長さから下線の数を決める（1拍以上＝なし、半拍・1/3拍＝1本、1/4・1/6＝2本、それより細かい＝3本）
+  const unit = (PPQ * beats) / grid.div;
+  const bars = unit >= 320 ? 0 : unit >= 160 ? 1 : unit >= 80 ? 2 : 3;
+  const isTriplet = unit % 60 !== 0;
   return (
     <div className={`beat div${grid.div}${playing ? ' playing' : ''}`} style={vertical ? { height: size } : { width: size }}>
       {grid.slots.map((s) => {
@@ -357,9 +385,9 @@ function BeatCell({
           </button>
         );
       })}
-      {bars > 0 && (
+      {(bars > 0 || isTriplet) && (
         <span className={`beat-bar bars${bars}`} aria-hidden="true">
-          {grid.div % 3 === 0 && <span className="triplet">3</span>}
+          {isTriplet && <span className="triplet">3</span>}
         </span>
       )}
     </div>

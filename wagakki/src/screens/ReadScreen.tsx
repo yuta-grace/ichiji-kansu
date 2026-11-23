@@ -7,7 +7,7 @@ import { SunSelect, TuningSelect } from '../components/controls';
 import { Button, Dialog, IconButton } from '../components/ui';
 import { playNote, type Voice } from '../audio/engine';
 import { honLabel, noteName, sunLabelWithNote } from '../lib/pitch';
-import { openStrings, POSITION_LABELS, rangeOf, STRING_LABELS, tuningOf, MAX_POS } from '../lib/shamisen';
+import { openStrings, POSITION_LABELS, rangeOf, tuningOf, MAX_POS } from '../lib/shamisen';
 import { kinkoFor, shakuhachiRange } from '../lib/shakuhachi';
 import { spell } from '../lib/notation';
 import type { Settings } from '../lib/storage';
@@ -16,7 +16,7 @@ import type { Instrument } from '../lib/instruments';
 export type ReadColumn = 'shamisen' | 'shakuhachi' | 'doremi' | 'cde' | 'staff';
 
 export const COLUMNS: { id: ReadColumn; label: string }[] = [
-  { id: 'shamisen', label: '三味線（勘所）' },
+  { id: 'shamisen', label: '三味線（文化譜）' },
   { id: 'shakuhachi', label: '尺八（ロツレチ）' },
   { id: 'doremi', label: 'ドレミ' },
   { id: 'cde', label: 'CDE' },
@@ -166,17 +166,23 @@ export function Cell({ col, midi, settings, withOctave }: { col: ReadColumn; mid
     .sort((a, b) => a.p - b.p || b.s - a.s);
   if (!all.length) return <span className="read-none">—</span>;
   const [main, ...rest] = all;
+  // 文化譜と同じ書き方：3本の線のどれかに勘所の数字を置く（ほかの糸で弾ける場所は小さく添える）
+  const lineOf = (str: number) => (settings.bunkaTop === 'san' ? 2 - str : str);
   return (
     <span className="read-sham">
-      <span className="read-sham-main">
-        <span className="read-str">{STRING_LABELS[main.s]}</span>
-        {POSITION_LABELS[main.p]}
-      </span>
+      <BunkaMini line={lineOf(main.s)} label={POSITION_LABELS[main.p]} />
       {rest.map((x) => (
-        <span key={x.s} className="read-sham-alt">
-          {STRING_LABELS[x.s]} {POSITION_LABELS[x.p]}
-        </span>
+        <BunkaMini key={x.s} small line={lineOf(x.s)} label={POSITION_LABELS[x.p]} />
       ))}
+    </span>
+  );
+}
+
+/** 1音だけの小さな文化譜（3本の線と勘所の数字） */
+function BunkaMini({ line, label, small }: { line: number; label: string; small?: boolean }) {
+  return (
+    <span className={`bunka-mini${small ? ' small read-sham-alt' : ''}`}>
+      <span className={`bunka-mini-num on-line${line}`}>{label}</span>
     </span>
   );
 }
