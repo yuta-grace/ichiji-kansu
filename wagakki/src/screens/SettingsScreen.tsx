@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useApp } from '../context';
 import { Button, Segmented, Select, Switch } from '../components/ui';
 import { KinkoText } from '../components/KinkoText';
+import { InstrumentSelect, SunSelect, TuningSelect } from '../components/controls';
 import { guessKind, loadFontFile, removeLoaded, setLoadedKind } from '../lib/fonts';
 import { KINKO_NOTES, type KinkoFontKind } from '../lib/shakuhachi';
 
@@ -60,6 +61,25 @@ export function SettingsScreen() {
             ]}
           />
         </div>
+      </section>
+
+      <section className="card">
+        <h2>自分の楽器</h2>
+        <p className="hint">演奏の画面と、新しい楽譜で使います（演奏の画面で選び直しても変わります）。</p>
+        <div className="field-row">
+          <span className="field-label">楽器</span>
+          <InstrumentSelect value={settings.instrument} onChange={(v) => update({ instrument: v })} />
+        </div>
+        {settings.instrument === 'shamisen' && (
+          <>
+            <SunSelect instrument="shamisen" value={settings.shamisenSun} onChange={(v) => update({ shamisenSun: v })} />
+            <div className="field-row">
+              <span className="field-label">調弦</span>
+              <TuningSelect value={settings.shamisenTuning} onChange={(v) => update({ shamisenTuning: v })} />
+            </div>
+          </>
+        )}
+        {settings.instrument === 'shakuhachi' && <SunSelect instrument="shakuhachi" value={settings.shakuhachiSun} onChange={(v) => update({ shakuhachiSun: v })} />}
       </section>
 
       <section className="card">

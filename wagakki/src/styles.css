@@ -2055,3 +2055,37 @@ input[type='range'] {
   gap: 2px;
   flex-shrink: 0;
 }
+
+/* 文化譜：数字は文字だけを線の上に載せる（後ろに紙の色を敷いて線を消さない） */
+.mark.pos,
+.mark.rest,
+.mark.ext {
+  background: none;
+  padding: 0;
+  line-height: 1;
+}
+
+/* 仕上がり表示：行を低く、文字を少し小さく */
+.score.compact .row-label.shamisen,
+.score.compact .row.shamisen {
+  height: 44px;
+}
+.score.compact .system {
+  margin-bottom: 10px;
+}
+.score.compact .measure-num,
+.score.compact .measure-num-spacer {
+  height: 22px;
+}
+.score.compact .mark.pos {
+  font-size: 13px;
+}
+.score.compact .vcol {
+  width: 42px;
+}
+.score.compact .mark.kin .kinko-kana {
+  font-size: 16px;
+}
+.score.compact.vertical {
+  gap: 12px;
+}

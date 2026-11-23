@@ -34,6 +34,53 @@ export interface ViewProps {
   playBeat: number | null;
   onSelect: (part: number, t: number, extend: boolean) => void;
   printMode?: boolean;
+  /** 仕上がり表示（小節を詰めて、行を低くする）。印刷・PDF ではいつもこれ */
+  compact?: boolean;
+}
+
+/**
+ * 拍ごとの大きさを中身から決め、小節を行に詰める。行は幅いっぱいに広げる（最後の行は広げすぎない）。
+ * 細かく割った拍だけ広くなるので、音の少ない小節は短くなる。
+ */
+function packLines(
+  song: Song,
+  usable: number,
+  minBeat: number,
+  minSlot: number,
+  ends: number[],
+): { measures: number[]; beats: number[][] }[] {
+  const bpm = song.beatsPerMeasure;
+  const sizes: number[][] = [];
+  for (let m = 0; m < song.measures; m++) {
+    const row: number[] = [];
+    for (let bi = 0; bi < bpm; bi++) {
+      const t = (m * bpm + bi) * PPQ;
+      const div = Math.max(...song.parts.map((p, pi) => beatGrid(p.events, t, ends[pi]).div));
+      row.push(Math.max(minBeat, div * minSlot));
+    }
+    sizes.push(row);
+  }
+  const PAD = 8;
+  const lines: { measures: number[]; beats: number[][] }[] = [];
+  let cur: number[] = [];
+  let used = 0;
+  for (let m = 0; m < song.measures; m++) {
+    const w = sizes[m].reduce((a, b) => a + b, 0) + PAD;
+    if (cur.length && used + w > usable) {
+      lines.push({ measures: cur, beats: cur.map((x) => sizes[x]) });
+      cur = [];
+      used = 0;
+    }
+    cur.push(m);
+    used += w;
+  }
+  if (cur.length) lines.push({ measures: cur, beats: cur.map((x) => sizes[x]) });
+  return lines.map((l, li) => {
+    const sum = l.beats.flat().reduce((a, b) => a + b, 0) + l.measures.length * PAD;
+    const last = li === lines.length - 1;
+    const k = Math.max(1, Math.min(last ? 1.25 : 2.2, (usable - l.measures.length * PAD) / (sum - l.measures.length * PAD)));
+    return { measures: l.measures, beats: l.beats.map((r) => r.map((b) => Math.floor(b * k))) };
+  });
 }
 
 /** 別の楽器のパートを、この表記で書くときの基準（寸法・調弦） */
@@ -45,11 +92,6 @@ export function referenceFor(song: Song, editIdx: number, notation: ScoreNotatio
   return song.parts.find((x) => x.instrument === want) ?? { ...p, tuning: 'honchoshi' };
 }
 
-function chunk(total: number, per: number): number[][] {
-  const lines: number[][] = [];
-  for (let m = 0; m < total; m += per) lines.push(Array.from({ length: Math.min(per, total - m) }, (_, i) => m + i));
-  return lines;
-}
 
 export function ScoreView(props: ViewProps) {
   if (props.notation === 'staff') return <StaffView {...props} />;
@@ -58,7 +100,7 @@ export function ScoreView(props: ViewProps) {
 
 // ---------------- 横書き（文化譜） ----------------
 
-function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect, printMode }: ViewProps) {
+function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect, printMode, compact }: ViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   useEffect(() => {
@@ -71,18 +113,20 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
   }, []);
 
   const narrow = width < 520;
-  const BEAT_W = printMode ? 44 : narrow ? 52 : 60;
-  const LABEL_W = narrow ? 58 : 76;
+  const tight = compact || printMode;
+  // パートが1つなら、パート名の欄は出さない（その分を楽譜に使う）
+  const showLabels = song.parts.length > 1;
+  const LABEL_W = showLabels ? (narrow ? 58 : 76) : 0;
   const bpm = song.beatsPerMeasure;
-  const measureW = bpm * BEAT_W + 8;
-  const usable = printMode ? 700 : width;
-  const perLine = Math.max(1, Math.floor((usable - LABEL_W - 4) / measureW));
+  const usable = (printMode ? 700 : width - 28) - LABEL_W;
   const ends = song.parts.map((p) => lastNoteEnd(p.events));
+  const lines = packLines(song, usable, tight ? (narrow ? 26 : 30) : narrow ? 40 : 58, tight ? 15 : 22, ends);
 
   return (
-    <div className={`score horizontal${printMode ? ' print' : ''}`} ref={ref}>
-      {chunk(song.measures, perLine).map((ms, li) => (
+    <div className={`score horizontal${printMode ? ' print' : ''}${tight ? ' compact' : ''}`} ref={ref}>
+      {lines.map(({ measures: ms, beats }, li) => (
         <div className="system" key={li} data-block>
+          {showLabels && (
           <div className="system-labels" style={{ width: LABEL_W }}>
             <div className="measure-num-spacer" />
             {song.parts.map((p, pi) => (
@@ -92,10 +136,11 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
               </div>
             ))}
           </div>
-          {ms.map((m) => {
+          )}
+          {ms.map((m, mi) => {
             const d = measureDecor(song, m);
             return (
-            <div className={`measure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} key={m} style={{ width: measureW }}>
+            <div className={`measure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} key={m}>
               <MeasureHead m={m} d={d} />
               {song.parts.map((p, pi) => (
                 <div key={p.id} className={`row shamisen${p.muted ? ' muted' : ''}`}>
@@ -107,7 +152,7 @@ function HorizontalScore({ song, editIdx, cursor, selection, playBeat, onSelect,
                     return (
                       <BeatCell
                         key={bi}
-                        size={BEAT_W}
+                        size={beats[mi][bi]}
                         song={song}
                         editIdx={editIdx}
                         notation="bunka"
@@ -151,7 +196,7 @@ function MeasureHead({ m, d }: { m: number; d: Decor }) {
 
 // ---------------- 縦書き（琴古譜） ----------------
 
-function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, printMode }: ViewProps) {
+function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, printMode, compact }: ViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(600);
   useEffect(() => {
@@ -163,14 +208,17 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
     return () => ro.disconnect();
   }, []);
 
-  const BEAT_H = printMode ? 46 : 60;
-  const HEAD_H = 52;
+  const tight = compact || printMode;
+  const showLabels = song.parts.length > 1;
+  const HEAD_H = showLabels ? 52 : 6;
   const bpm = song.beatsPerMeasure;
-  const measureH = bpm * BEAT_H + 1;
-  const usable = printMode ? 940 : height - 24;
-  const perLine = Math.max(1, Math.floor((usable - HEAD_H - 20) / measureH));
-  const lines = chunk(song.measures, perLine);
   const ends = song.parts.map((p) => lastNoteEnd(p.events));
+  // 縦譜は行（列）の高さに小節を詰める。拍の高さは中身から決める
+  const usable = (printMode ? 940 : height - 24) - HEAD_H - 24;
+  // 琴古の名前（リ中メリなど）は縦に長いので、マスは文化譜より高めにとる
+  const packed = packLines(song, usable, tight ? 42 : 56, tight ? 24 : 26, ends);
+  const lines = packed.map((l) => l.measures);
+  const beatH = (m: number) => packed.find((l) => l.measures.includes(m))!.beats[packed.find((l) => l.measures.includes(m))!.measures.indexOf(m)];
 
   // 縦譜は右から読むので、最初は右端を見せる
   useLayoutEffect(() => {
@@ -178,14 +226,14 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
     if (scroller && !printMode) scroller.scrollLeft = scroller.scrollWidth;
   }, [printMode]);
 
-  const cursorLine = cursor ? Math.floor(cursor.t / PPQ / bpm / perLine) : -1;
+  const cursorLine = cursor ? lines.findIndex((l) => l.includes(Math.floor(cursor.t / PPQ / bpm))) : -1;
   useEffect(() => {
     if (cursorLine < 0 || printMode) return;
     ref.current?.querySelector(`[data-line="${cursorLine}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [cursorLine, printMode]);
 
   return (
-    <div className={`score vertical${printMode ? ' print' : ''}`} ref={ref}>
+    <div className={`score vertical${printMode ? ' print' : ''}${tight ? ' compact' : ''}`} ref={ref}>
       {lines.map((ms, li) => (
         <div className="vsystem" key={li} data-line={li} data-block>
           <div className="vnums" aria-hidden="true">
@@ -193,7 +241,7 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
             {ms.map((m) => {
               const d = measureDecor(song, m);
               return (
-                <div key={m} className={`vnum${d.volta ? ' in-volta' : ''}${d.volta?.start ? ' volta-start' : ''}`} style={{ height: measureH }}>
+                <div key={m} className={`vnum${d.volta ? ' in-volta' : ''}${d.volta?.start ? ' volta-start' : ''}`} style={{ height: beatH(m).reduce((a, b) => a + b, 0) + 1 }}>
                   <span>{m + 1}</span>
                   {d.volta?.start && <span className="vmark">{d.volta.label}</span>}
                   {d.segno && <span className="music-glyph vmark">𝄋</span>}
@@ -207,13 +255,17 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
           {song.parts.map((p, pi) => (
             <div key={p.id} className={`vcol${pi === editIdx ? ' editing' : ''}${p.muted ? ' muted' : ''}`}>
               <div className="vhead" style={{ height: HEAD_H }}>
-                <span className="swatch" style={{ background: PART_COLORS[pi % PART_COLORS.length] }} />
-                <span className="vhead-text">{p.name || `パート${pi + 1}`}</span>
+                {showLabels && (
+                  <>
+                    <span className="swatch" style={{ background: PART_COLORS[pi % PART_COLORS.length] }} />
+                    <span className="vhead-text">{p.name || `パート${pi + 1}`}</span>
+                  </>
+                )}
               </div>
               {ms.map((m) => {
                 const d = measureDecor(song, m);
                 return (
-                <div key={m} className={`vmeasure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} style={{ height: measureH }}>
+                <div key={m} className={`vmeasure${d.repStart ? ' rep-start' : ''}${d.repEnd ? ' rep-end' : ''}`} style={{ height: beatH(m).reduce((a, b) => a + b, 0) + 1 }}>
                   {d.repStart && <span className="rep-dots start" aria-hidden="true" />}
                   {d.repEnd > 0 && <span className="rep-dots end" aria-hidden="true" />}
                   {Array.from({ length: bpm }, (_, bi) => {
@@ -222,7 +274,7 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
                       <BeatCell
                         key={bi}
                         vertical
-                        size={BEAT_H}
+                        size={beatH(m)[bi]}
                         song={song}
                         editIdx={editIdx}
                         notation="kinko"

@@ -11,11 +11,13 @@ type Mode = 'score' | 'play';
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
+  // 開いたときは前回使っていた画面。初めてのときは、すぐ音が出せる「演奏」
   const [mode, setMode] = useState<Mode>(() => {
     try {
-      return (sessionStorage.getItem('wagakki.mode') as Mode) || 'score';
+      const m = localStorage.getItem('wagakki.mode');
+      return m === 'score' || m === 'play' ? m : 'play';
     } catch {
-      return 'score';
+      return 'play';
     }
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -41,7 +43,7 @@ export function App() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem('wagakki.mode', mode);
+      localStorage.setItem('wagakki.mode', mode);
     } catch {
       /* 保存できなくても動く */
     }

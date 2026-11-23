@@ -14,6 +14,8 @@ export interface Settings {
   scoreView: 'auto' | 'bunka' | 'kinko' | 'staff';
   /** 複数のパートを同じ画面に出す（本手と替手など） */
   multiPart: boolean;
+  /** 楽譜の表示：auto＝PC は仕上がり、スマホは編集しやすい表示 */
+  scoreDensity: 'auto' | 'edit' | 'compact';
   /** 'auto'：見つかった琴古フォント、'kana'：カタカナ、それ以外：フォント名 */
   kinkoFont: string;
   theme: 'system' | 'light' | 'dark';
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showPiano: true,
   scoreView: 'auto',
   multiPart: false,
+  scoreDensity: 'auto',
   kinkoFont: 'auto',
   theme: 'system',
   instrument: 'shamisen',

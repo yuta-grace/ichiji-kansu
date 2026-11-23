@@ -4,7 +4,7 @@ import { loadVexFlow, type VexFlow } from '../lib/libs';
 import { measureItems, spell, type Item } from '../lib/notation';
 import { measureLen, type Song } from '../lib/score';
 import { instrumentDef } from '../lib/instruments';
-import { measureDecor } from '../lib/marks';
+import { hasMarks, measureDecor } from '../lib/marks';
 import type { JumpKind } from '../lib/score';
 
 const JUMP_REP: Record<JumpKind, 'DC' | 'DC_AL_FINE' | 'DC_AL_CODA' | 'DS' | 'DS_AL_FINE' | 'DS_AL_CODA'> = {
@@ -17,8 +17,6 @@ const JUMP_REP: Record<JumpKind, 'DC' | 'DC_AL_FINE' | 'DC_AL_CODA' | 'DS' | 'DS
 };
 import { PART_COLORS, type ViewProps } from './ScoreView';
 
-const STAFF_H = 96; // 1段の高さ
-const TOP = 34; // 番括弧・セーニョ・D.C. などを書く余白
 const LABEL_W = 64;
 
 interface Hit {
@@ -26,7 +24,7 @@ interface Hit {
   t: number;
 }
 
-export function StaffView({ song, editIdx, cursor, selection, playBeat, onSelect, printMode }: ViewProps) {
+export function StaffView({ song, editIdx, cursor, selection, playBeat, onSelect, printMode, compact }: ViewProps) {
   const [vf, setVf] = useState<VexFlow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -52,7 +50,11 @@ export function StaffView({ song, editIdx, cursor, selection, playBeat, onSelect
   }, []);
 
   const playT = playBeat === null ? null : playBeat * 480;
-  const lines = vf ? layout(song, printMode ? 720 : width) : [];
+  const tight = !!(compact || printMode);
+  const labelW = song.parts.length > 1 ? LABEL_W : 0;
+  // 1段の高さ。記号（番括弧・セーニョ・D.C. など）があるときだけ上に余白をとる
+  const dims: Dims = { staffH: tight ? 78 : 96, top: hasMarks(song) ? 34 : tight ? 10 : 18, labelW };
+  const lines = vf ? layout(song, (printMode ? 720 : width) - labelW, tight) : [];
 
   return (
     <div className={`score staff${printMode ? ' print' : ''}`} ref={ref}>
@@ -71,6 +73,7 @@ export function StaffView({ song, editIdx, cursor, selection, playBeat, onSelect
             selection={selection}
             playT={playT}
             onSelect={onSelect}
+            dims={dims}
           />
         ))}
     </div>
@@ -78,12 +81,18 @@ export function StaffView({ song, editIdx, cursor, selection, playBeat, onSelect
 }
 
 /** 小節の幅を音符の数から決め、行に詰める */
-function layout(song: Song, width: number): { measures: number[]; widths: number[] }[] {
+interface Dims {
+  staffH: number;
+  top: number;
+  labelW: number;
+}
+
+function layout(song: Song, width: number, tight: boolean): { measures: number[]; widths: number[] }[] {
   const mLen = measureLen(song);
-  const usable = Math.max(240, width - LABEL_W - 16);
+  const usable = Math.max(240, width - 16);
   const base = (m: number) => {
     const n = Math.max(...song.parts.map((p) => measureItems(p.events, m * mLen, mLen, p.tuplets).items.length));
-    return 36 + n * 30;
+    return (tight ? 28 : 36) + n * (tight ? 24 : 30);
   };
   const lines: { measures: number[]; widths: number[] }[] = [];
   let cur: number[] = [];
@@ -122,7 +131,9 @@ function StaffLine({
   selection,
   playT,
   onSelect,
+  dims,
 }: {
+  dims: Dims;
   vf: VexFlow;
   song: Song;
   measures: number[];
@@ -145,7 +156,7 @@ function StaffLine({
     const accent = css.getPropertyValue('--primary').trim() || '#415f91';
     const lit = css.getPropertyValue('--lit-strong').trim() || '#e8643c';
     const totalW = widths.reduce((a, b) => a + b, 0) + 10;
-    const height = TOP + song.parts.length * STAFF_H + 26; // 下向きの符尾の3連符の数字が切れないように
+    const height = dims.top + song.parts.length * dims.staffH + 26; // 下向きの符尾の3連符の数字が切れないように
     const renderer = new vf.Renderer(el, vf.Renderer.Backends.SVG);
     renderer.resize(totalW, height);
     const ctx = renderer.getContext();
@@ -155,7 +166,7 @@ function StaffLine({
     hits.current = song.parts.map(() => []);
 
     song.parts.forEach((p, pi) => {
-      const y = TOP + pi * STAFF_H;
+      const y = dims.top + pi * dims.staffH;
       const shamisen = instrumentDef(p.instrument).clef === 'treble8vb';
       let x = 0;
       let prevNote: InstanceType<VexFlow['StaveNote']> | null = null;
@@ -224,13 +235,13 @@ function StaffLine({
         new vf.StaveTie({ first_note: prevNote, last_note: null, first_indices: [0], last_indices: [0] }).setContext(ctx).draw();
       }
     });
-  }, [vf, song, measures, widths, editIdx, cursor, selection, playT]);
+  }, [vf, song, measures, widths, editIdx, cursor, selection, playT, dims.staffH, dims.top]);
 
   const click = (e: React.MouseEvent<HTMLDivElement>) => {
     const r = box.current!.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    const pi = Math.max(0, Math.min(song.parts.length - 1, Math.floor((y - TOP + 20) / STAFF_H)));
+    const pi = Math.max(0, Math.min(song.parts.length - 1, Math.floor((y - dims.top + 20) / dims.staffH)));
     const row = hits.current[pi];
     if (!row?.length) return;
     let best = row[0];
@@ -240,9 +251,9 @@ function StaffLine({
 
   return (
     <div className="staff-line" data-block>
-      <div className="staff-labels" style={{ width: LABEL_W }}>
+      <div className="staff-labels" style={{ width: dims.labelW }}>
         {song.parts.map((p, pi) => (
-          <div key={p.id} className={`staff-label${pi === editIdx ? ' editing' : ''}${p.muted ? ' muted' : ''}`} style={{ top: TOP + pi * STAFF_H + 24 }}>
+          <div key={p.id} className={`staff-label${pi === editIdx ? ' editing' : ''}${p.muted ? ' muted' : ''}`} style={{ top: dims.top + pi * dims.staffH + 24 }}>
             <span className="swatch" style={{ background: PART_COLORS[pi % PART_COLORS.length] }} />
             <span className="row-label-text">{p.name || `パート${pi + 1}`}</span>
           </div>

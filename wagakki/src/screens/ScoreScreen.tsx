@@ -13,6 +13,7 @@ import { instrumentDef, INSTRUMENT_LIST } from '../lib/instruments';
 
 const NOTATION_LABEL: Record<ScoreNotation, string> = { bunka: '文化譜', kinko: '琴古譜', staff: '五線譜' };
 import { BarSlot } from '../components/BarSlot';
+import { useMedia } from '../components/useMedia';
 import { AuditionBar, type ScratchNote } from '../components/Audition';
 import {
   addTuplet,
@@ -53,11 +54,14 @@ import { buildPdf, ON_CLAUDE_PAGE, safeName, saveFile, type SaveResult } from '.
 import { currentSongId, deleteSong, loadSongs, saveSong, type Settings } from '../lib/storage';
 import { PART_COLORS, ScoreView, type Cursor, type ScoreNotation, type Selection } from './ScoreView';
 
-function initialSong(): Song {
+/** 前回の曲。まだ曲がなければ「自分の楽器」で新しい楽譜を作る（楽器を毎回は聞かない） */
+function initialSong(settings: Settings): Song {
   const id = currentSongId();
   const songs = loadSongs();
-  return songs.find((s) => s.id === id) ?? songs[0] ?? newSong();
+  return songs.find((s) => s.id === id) ?? songs[0] ?? newSong(settings.instrument, mySun(settings), settings.shamisenTuning);
 }
+
+const mySun = (st: Settings) => (st.instrument === 'shamisen' ? st.shamisenSun : st.shakuhachiSun);
 
 // 音の長さ（1拍＝480）
 const BASES: { v: number; label: string; key: string; icon: string }[] = [
@@ -109,7 +113,7 @@ type ExportKind = 'midi' | 'xml' | 'wav' | 'pdf' | 'json';
 
 export function ScoreScreen() {
   const { settings, update, toast } = useApp();
-  const [song, setSong] = useState<Song>(initialSong);
+  const [song, setSong] = useState<Song>(() => initialSong(settings));
   const [editIdx, setEditIdx] = useState(0);
   const [cursor, setCursor] = useState<Cursor>({ part: 0, t: 0 });
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -120,8 +124,7 @@ export function ScoreScreen() {
   const [triplet, setTriplet] = useState(false);
   const [playBeat, setPlayBeat] = useState<number | null>(null);
   const [loop, setLoop] = useState(false);
-  // 初めて開いたとき（保存した曲がない）は、楽器を選ぶところから始める
-  const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add' | 'new' | 'marks'>(() => (loadSongs().length ? null : 'new'));
+  const [dlg, setDlg] = useState<null | 'part' | 'song' | 'files' | 'add' | 'new' | 'marks'>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [audition, setAudition] = useState(false);
@@ -135,6 +138,7 @@ export function ScoreScreen() {
   const [, bump] = useState(0); // 元に戻す・やり直しのボタンの状態を描き直す
 
   const edit = song.parts[editIdx] ?? song.parts[0];
+  const wide = useMedia('(min-width: 900px)');
   // 楽器に合う記譜方式だけ選べる。前の形式の「合奏」の曲（楽器が混ざっている）は全部選べる
   const mixed = song.parts.some((p) => p.instrument !== song.instrument);
   const allowed: ScoreNotation[] = mixed ? ['bunka', 'kinko', 'staff'] : instrumentDef(song.instrument).notations;
@@ -494,6 +498,7 @@ export function ScoreScreen() {
     .filter(Boolean)
     .join('　');
   const showParts = settings.multiPart || song.parts.length > 1;
+  const compact = settings.scoreDensity === 'auto' ? wide : settings.scoreDensity === 'compact';
   const order = playOrder(song);
 
   const durTools = (
@@ -578,6 +583,12 @@ export function ScoreScreen() {
             />
           </div>
         )}
+        <IconButton
+          icon="compact"
+          label={compact ? '編集しやすい表示にする' : '仕上がり表示にする（小節を詰めて1行に多く）'}
+          selected={compact}
+          onClick={() => update({ scoreDensity: compact ? 'edit' : 'compact' })}
+        />
         <div className="bar-group transport">
           <button type="button" className="tempo-btn hide-narrow" onClick={() => setDlg('song')} title="テンポ">
             ♩={song.tempo}
@@ -649,7 +660,7 @@ export function ScoreScreen() {
             </div>
           )}
           <div className="score-scroll">
-            <ScoreView {...viewProps} cursor={cursor} selection={selection} playBeat={playBeat} onSelect={select} />
+            <ScoreView {...viewProps} cursor={cursor} selection={selection} playBeat={playBeat} onSelect={select} compact={compact} />
           </div>
         </div>
       </div>
@@ -771,7 +782,7 @@ export function ScoreScreen() {
       />
       <NewSongDialog
         open={dlg === 'new'}
-        defaults={edit}
+        defaults={{ ...edit, instrument: settings.instrument, sun: mySun(settings), tuning: settings.shamisenTuning }}
         onClose={() => setDlg(null)}
         onCreate={(s) => {
           saveSong(latest.current);
