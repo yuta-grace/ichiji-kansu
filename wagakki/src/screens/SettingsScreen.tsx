@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useApp } from '../context';
 import { Button, Segmented, Select, Switch } from '../components/ui';
 import { KinkoText } from '../components/KinkoText';
+import { KeymapEditor } from '../components/KeymapEditor';
 import { InstrumentSelect, SunSelect, TuningSelect } from '../components/controls';
 import { guessKind, loadFontFile, removeLoaded, setLoadedKind } from '../lib/fonts';
 import { KINKO_NOTES, type KinkoFontKind } from '../lib/shakuhachi';
@@ -210,10 +211,14 @@ export function SettingsScreen() {
       </section>
 
       <section className="card">
-        <h2>キーボード操作（PC）</h2>
+        <h2>キーボード（PC）</h2>
+        <p className="hint">
+          鳴らす・書くの画面で、キーボードで音を出せます。三味線は左手（勘所）を押さえたまま右手（バチ）で弾き、尺八は指（ロツレチリ）に、メリ・カリ・甲などを押しながら組み合わせます。
+        </p>
+        <KeymapEditor />
         <ul className="hint keys">
-          <li>A W S E D F T G Y H U J K O L P ; … 基準の音（尺八は筒音、三味線は一の糸）から半音ずつ鳴らす／入力する。Z・X でオクターブを変える</li>
-          <li>楽譜：← → で移動、↑ ↓ でパートを移る、. か 0 で休み、- で伸ばし、Delete で消す、Backspace で前を消す、1〜4 で拍の分割、スペースで再生・停止</li>
+          <li>書く：← → で移動、↑ ↓ でパート、Delete・Backspace で消す（前の音へ）、Enter で再生・停止、Alt＋1〜5 で音の長さ</li>
+          <li>楽器のキーと重ならなければ：1〜5 で音の長さ、. で付点、, で3連、0 で休み、- で伸ばし、スペースで再生・停止</li>
         </ul>
       </section>
     </div>

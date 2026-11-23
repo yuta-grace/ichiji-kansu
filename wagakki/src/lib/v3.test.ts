@@ -204,3 +204,26 @@ describe('記号の書き出し', () => {
     expect([...midi].filter((b, i) => b === 0x90 && midi[i + 1] === 60).length).toBe(3);
   });
 });
+
+describe('ピアノの大譜表', () => {
+  it('新しいピアノの楽譜は大譜表。MusicXML は2段で、低い音はヘ音記号の段', () => {
+    const s = newSong('piano');
+    expect(s.parts[0].staff).toBe('grand');
+    s.parts[0].events = writeAt(writeAt(s.parts[0].events, 0, Q, { midi: 64 }), Q, Q, { midi: 48 });
+    const x = buildMusicXml(s);
+    expect(x).toContain('<staves>2</staves>');
+    expect(x).toContain('<clef number="2"><sign>F</sign><line>4</line></clef>');
+    expect(x).toMatch(/<step>C<\/step><octave>3<\/octave><\/pitch>[\s\S]*?<staff>2<\/staff>/);
+    s.parts[0].staff = 'bass';
+    expect(parseSong(JSON.parse(JSON.stringify(s))).parts[0].staff).toBe('bass');
+  });
+});
+
+describe('キー割り当て', () => {
+  it('標準の割り当てに、変えた分を重ねる', async () => {
+    const { keymapFor, actionOf } = await import('./keymaps');
+    expect(actionOf(keymapFor('shakuhachi'), 'KeyA')).toBe('ro');
+    expect(actionOf(keymapFor('shamisen'), 'KeyJ')).toBe('str0');
+    expect(actionOf(keymapFor('piano', { piano: { n0: 'KeyQ' } }), 'KeyQ')).toBe('n0');
+  });
+});

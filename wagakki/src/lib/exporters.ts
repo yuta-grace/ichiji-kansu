@@ -70,8 +70,19 @@ const TYPE: Record<NoteValue, string> = { w: 'whole', h: 'half', q: 'quarter', '
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** 音部記号。ピアノは大譜表（2段）が標準、三味線はギターと同じく1オクターブ上に書くト音記号 */
+function clefXml(p: Part): string[] {
+  const mode = p.instrument === 'piano' ? (p.staff ?? 'grand') : 'treble';
+  if (mode === 'grand')
+    return ['        <staves>2</staves>', '        <clef number="1"><sign>G</sign><line>2</line></clef>', '        <clef number="2"><sign>F</sign><line>4</line></clef>'];
+  if (mode === 'bass') return ['        <clef><sign>F</sign><line>4</line></clef>'];
+  if (instrumentDef(p.instrument).clef === 'treble8vb') return ['        <clef><sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change></clef>'];
+  return ['        <clef><sign>G</sign><line>2</line></clef>'];
+}
+
 function partXml(song: Song, p: Part, pi: number): string {
   const mLen = measureLen(song);
+  const grand = p.instrument === 'piano' && (p.staff ?? 'grand') === 'grand';
   const out: string[] = [`  <part id="P${pi + 1}">`];
   for (let m = 0; m < song.measures; m++) {
     out.push(`    <measure number="${m + 1}">`);
@@ -81,10 +92,7 @@ function partXml(song: Song, p: Part, pi: number): string {
         `        <divisions>${PPQ}</divisions>`,
         '        <key><fifths>0</fifths></key>',
         `        <time><beats>${song.beatsPerMeasure}</beats><beat-type>4</beat-type></time>`,
-        // 三味線はギターと同じく、1オクターブ上に書くト音記号
-        instrumentDef(p.instrument).clef === 'treble8vb'
-          ? '        <clef><sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change></clef>'
-          : '        <clef><sign>G</sign><line>2</line></clef>',
+        ...clefXml(p),
         '      </attributes>',
       );
       if (pi === 0) {
@@ -125,6 +133,8 @@ function partXml(song: Song, p: Part, pi: number): string {
       n.push(`        <type>${TYPE[it.value]}</type>`);
       for (let d = 0; d < it.dots; d++) n.push('        <dot/>');
       if (it.triplet) n.push('        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>');
+      // 大譜表：真ん中のドから下はヘ音記号の段（休みはト音記号の段）
+      if (grand) n.push(`        <staff>${it.midi !== undefined && it.midi < 60 ? 2 : 1}</staff>`);
       const nots: string[] = [];
       if (it.tieStop) nots.push('<tied type="stop"/>');
       if (it.tieStart) nots.push('<tied type="start"/>');

@@ -3,14 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context';
 import { playNote, type Voice } from '../audio/engine';
 import { pc } from '../lib/pitch';
-import { fingeringFor, type Tuning } from '../lib/shamisen';
+import { fingeringFor, openStrings, type Tuning } from '../lib/shamisen';
+import { actionOf, keymapFor, SHAKU_FINGERS, SHAKU_MODS } from '../lib/keymaps';
 import { instrumentDef } from '../lib/instruments';
 import type { Instrument } from '../lib/score';
 import { ShamisenNeck } from './ShamisenNeck';
 import { ShakuhachiPad } from './ShakuhachiPad';
 import { Piano } from './Piano';
-
-const KEY_ROW = ['a', 'w', 's', 'e', 'd', 'f', 't', 'g', 'y', 'h', 'u', 'j', 'k', 'o', 'l', 'p', ';'];
 
 export function InstrumentPanel({
   instrument,
@@ -85,45 +84,90 @@ export function InstrumentPanel({
     });
   };
 
-  // PC のキーボード：A W S E D F T G Y H U J K O L P ; で基準の音（筒音・一の糸）から半音ずつ。Z / X でオクターブ
+  // PC のキーボード（楽器ごとの割り当て。設定で変えられる。src/lib/keymaps.ts）
   const [oct, setOct] = useState(0);
   const downRef = useRef(down);
   const upRef = useRef(up);
   downRef.current = down;
   upRef.current = up;
   useEffect(() => {
-    const keysDown = new Set<string>();
-    const base = instrumentDef(instrument).base(sun);
+    const map = keymapFor(instrument, settings.keymaps);
+    const held = new Set<string>(); // 押しているキー（code）
+    const heldPos = new Set<number>(); // 三味線：押さえている勘所
+    const heldMods = new Set<string>(); // 尺八：押しているメリ・カリ・甲など
+    const [lo, hi] = instrumentDef(instrument).range(sun, tuning);
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, select, dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
-      const k = e.key.toLowerCase();
-      if (e.type === 'keydown' && (k === 'z' || k === 'x')) {
-        setOct((o) => Math.max(-1, Math.min(2, o + (k === 'z' ? -1 : 1))));
+      if (t.closest('input, textarea, select, dialog') || document.querySelector('.sheet') || e.metaKey || e.ctrlKey || e.altKey) return;
+      const action = actionOf(map, e.code);
+      if (!action) return;
+      e.preventDefault();
+      const down = e.type === 'keydown';
+      if (down && held.has(e.code)) return; // 押しっぱなしの繰り返しは無視
+      if (down) held.add(e.code);
+      else held.delete(e.code);
+      const id = 2000 + Object.keys(map).indexOf(action);
+
+      if (instrument === 'piano') {
+        if (action === 'octDown' || action === 'octUp') {
+          if (down) setOct((o) => Math.max(-4, Math.min(3, o + (action === 'octDown' ? -1 : 1))));
+          return;
+        }
+        const i = Number(action.slice(1));
+        if (down) {
+          const midi = 60 + i + oct * 12;
+          if (midi >= lo && midi <= hi) downRef.current(midi, id);
+        } else upRef.current(id);
         return;
       }
-      const i = KEY_ROW.indexOf(k);
-      if (i < 0) return;
-      e.preventDefault();
-      const id = 2000 + i;
-      if (e.type === 'keydown') {
-        if (keysDown.has(k)) return;
-        keysDown.add(k);
-        const midi = base + i + oct * 12;
-        const hint = instrument === 'shamisen' ? fingeringFor(midi, sun, tuning)?.string : undefined;
-        downRef.current(midi, id, hint);
-      } else {
-        keysDown.delete(k);
-        upRef.current(id);
+
+      if (instrument === 'shamisen') {
+        if (action.startsWith('pos')) {
+          const p = Number(action.slice(3));
+          if (down) heldPos.add(p);
+          else heldPos.delete(p);
+          return;
+        }
+        if (down && action.startsWith('str')) {
+          const s = Number(action.slice(3));
+          const pos = heldPos.size ? Math.max(...heldPos) : 0; // 押さえていなければ開放弦
+          const midi = openStrings(sun, tuning)[s] + pos;
+          setPressed({ string: s, pos });
+          window.setTimeout(() => setPressed((x) => (x && x.string === s && x.pos === pos ? null : x)), 350);
+          downRef.current(midi, id, s);
+        }
+        return;
       }
+
+      // 尺八：指（ロツレチリ）＋押しながらの変化（メリ・カリ・甲・大甲）
+      const mod = SHAKU_MODS.find((m) => m.id === action);
+      if (mod) {
+        if (down) heldMods.add(mod.id);
+        else heldMods.delete(mod.id);
+        return;
+      }
+      const finger = SHAKU_FINGERS.find((f) => f.id === action);
+      if (!finger) return;
+      if (down) {
+        const shift = SHAKU_MODS.filter((m) => heldMods.has(m.id)).reduce((a, m) => a + m.shift, 0);
+        const midi = instrumentDef('shakuhachi').base(sun) + finger.rel + shift;
+        if (midi >= lo && midi <= hi) downRef.current(midi, id);
+      } else upRef.current(id);
+    };
+    const reset = () => {
+      held.clear();
+      heldPos.clear();
+      heldMods.clear();
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKey);
+    window.addEventListener('blur', reset);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKey);
+      window.removeEventListener('blur', reset);
     };
-  }, [instrument, sun, tuning, oct]);
+  }, [instrument, sun, tuning, oct, settings.keymaps]);
 
   const basePc = pc(instrumentDef(instrument).base(sun));
 

@@ -62,7 +62,7 @@ function pluckBuffer(c: BaseAudioContext, f: number): AudioBuffer {
   const hit = pluckCache.get(key);
   if (hit) return hit;
   const sr = c.sampleRate;
-  const seconds = 2.6;
+  const seconds = 3.6;
   const len = Math.floor(sr * seconds);
   const buf = c.createBuffer(1, len, sr);
   const out = buf.getChannelData(0);
@@ -117,7 +117,10 @@ export function playShamisen(midi: number, opts: PlayOpts = {}): Voice {
   lp.frequency.value = Math.min(9000, f * 18);
   const g = c.createGain();
   const vol = (opts.gain ?? 0.8) * 0.9;
+  // 自然に小さくなって消える（音源の終わりで急に途切れないよう、最後はなめらかに 0 へ）
   g.gain.setValueAtTime(vol, t);
+  g.gain.setTargetAtTime(vol * 0.5, t + 0.4, 0.6);
+  g.gain.setTargetAtTime(0, t + 1.6, 0.45);
   src.connect(body).connect(lp).connect(g).connect(m);
 
   // 撥が皮を打つ音
@@ -135,15 +138,17 @@ export function playShamisen(midi: number, opts: PlayOpts = {}): Voice {
   click.stop(t + 0.05);
 
   src.start(t);
-  src.stop(t + 2.6);
+  src.stop(t + 3.6);
   return {
     stop(when) {
       const s = Math.max(when ?? c.currentTime, t + 0.02);
-      g.gain.cancelScheduledValues(s);
-      g.gain.setValueAtTime(g.gain.value || vol, s);
-      g.gain.setTargetAtTime(0, s, 0.03);
+      // 押さえを離したように、短く減衰させて止める
+      const gp = g.gain as AudioParam & { cancelAndHoldAtTime?: (t: number) => void };
+      if (gp.cancelAndHoldAtTime) gp.cancelAndHoldAtTime(s);
+      else gp.cancelScheduledValues(s);
+      g.gain.setTargetAtTime(0, s, 0.06);
       try {
-        src.stop(s + 0.2);
+        src.stop(s + 0.5);
       } catch {
         /* 既に止まっている */
       }

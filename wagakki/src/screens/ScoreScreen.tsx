@@ -16,6 +16,7 @@ import { BarSlot } from '../components/BarSlot';
 import { useMedia } from '../components/useMedia';
 import { AuditionBar, scratchLabel, type ScratchNote } from '../components/Audition';
 import { playNote } from '../audio/engine';
+import { usesKey } from '../lib/keymaps';
 import {
   addTuplet,
   changeSun,
@@ -448,7 +449,7 @@ export function ScoreScreen() {
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     const t = e.target as HTMLElement;
-    if (t.closest('input, textarea, select, dialog')) return;
+    if (t.closest('input, textarea, select, dialog') || document.querySelector('.sheet')) return;
     const k = e.key;
     const mod = e.metaKey || e.ctrlKey;
     const done = () => e.preventDefault();
@@ -461,7 +462,21 @@ export function ScoreScreen() {
       else if (lk === 'v') (done(), paste());
       return;
     }
-    if (e.altKey) return;
+    // Alt＋1〜5 はいつでも音の長さ（楽器のキーと重なっても使える）
+    if (e.altKey) {
+      const b = BASES.find((x) => x.key === k || `Digit${x.key}` === e.code);
+      if (b) (done(), setBase(b.v));
+      return;
+    }
+    // Enter はいつでも再生・停止
+    if (k === 'Enter') {
+      done();
+      togglePlay();
+      return;
+    }
+    // 楽器のキー（鳴らす・入力）と重なるキーは、楽器を優先する
+    const navKey = k.startsWith('Arrow') || k === 'Backspace' || k === 'Delete' || k === 'Escape';
+    if (!navKey && usesKey(edit.instrument, settings.keymaps, e.code)) return;
     if (k === 'ArrowRight' || k === 'ArrowLeft') {
       done();
       select(cursor.part, stepFrom(cursor.part, cursor.t, k === 'ArrowRight' ? 1 : -1), e.shiftKey);
@@ -889,6 +904,22 @@ function PartDialog({
         <div className="field-row">
           <span className="field-label">調弦</span>
           <TuningSelect value={part.tuning} onChange={(v) => onChange((p) => ({ ...p, tuning: v }))} />
+        </div>
+      )}
+      {part.instrument === 'piano' && (
+        <div className="field-row">
+          <span className="field-label">五線譜</span>
+          <Segmented<'grand' | 'treble' | 'bass'>
+            dense
+            label="ピアノの五線譜"
+            value={part.staff ?? 'grand'}
+            onChange={(v) => onChange((p) => ({ ...p, staff: v }))}
+            options={[
+              { value: 'grand', label: '大譜表（2段）' },
+              { value: 'treble', label: 'ト音記号だけ' },
+              { value: 'bass', label: 'ヘ音記号だけ' },
+            ]}
+          />
         </div>
       )}
       <label className="field">

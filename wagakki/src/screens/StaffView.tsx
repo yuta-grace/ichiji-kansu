@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadVexFlow, type VexFlow } from '../lib/libs';
 import { measureItems, spell, type Item } from '../lib/notation';
-import { measureLen, type Song } from '../lib/score';
+import { isNote, measureLen, type Ev, type Part, type Song } from '../lib/score';
 import { instrumentDef } from '../lib/instruments';
 import { hasMarks, measureDecor } from '../lib/marks';
 import type { JumpKind } from '../lib/score';
@@ -155,32 +155,38 @@ function StaffLine({
     const ink = css.getPropertyValue('--ink').trim() || '#000';
     const accent = css.getPropertyValue('--primary').trim() || '#415f91';
     const lit = css.getPropertyValue('--lit-strong').trim() || '#e8643c';
-    const totalW = widths.reduce((a, b) => a + b, 0) + 10;
-    const height = dims.top + song.parts.length * dims.staffH + 26; // 下向きの符尾の3連符の数字が切れないように
+    const rows = staffRows(song);
+    const anyGrand = song.parts.some((p) => staffModeOf(p) === 'grand');
+    const x0 = anyGrand ? 18 : 0; // 大譜表の括弧（ブレース）の場所
+    const totalW = widths.reduce((a, b) => a + b, 0) + 10 + x0;
+    const height = dims.top + rows.length * dims.staffH + 26; // 下向きの符尾の3連符の数字が切れないように
     const renderer = new vf.Renderer(el, vf.Renderer.Backends.SVG);
     renderer.resize(totalW, height);
     const ctx = renderer.getContext();
     ctx.setFillStyle(ink);
     ctx.setStrokeStyle(ink);
     const mLen = measureLen(song);
-    hits.current = song.parts.map(() => []);
+    hits.current = rows.map(() => []);
+    const staves: InstanceType<VexFlow['Stave']>[][] = rows.map(() => []);
 
-    song.parts.forEach((p, pi) => {
-      const y = dims.top + pi * dims.staffH;
-      const shamisen = instrumentDef(p.instrument).clef === 'treble8vb';
-      let x = 0;
+    rows.forEach((row, ri) => {
+      const p = song.parts[row.pi];
+      const pi = row.pi;
+      const y = dims.top + ri * dims.staffH;
+      let x = x0;
       let prevNote: InstanceType<VexFlow['StaveNote']> | null = null;
       let prevTieOpen = false;
       measures.forEach((m, mi) => {
         const w = widths[mi];
         const stave = new vf.Stave(x, y, w);
-        if (mi === 0) stave.addClef('treble', 'default', shamisen ? '8vb' : undefined);
+        staves[ri].push(stave);
+        if (mi === 0) stave.addClef(row.clef, 'default', row.octaveDown ? '8vb' : undefined);
         if (m === 0) stave.addTimeSignature(`${song.beatsPerMeasure}/4`);
-        // 繰り返し・番括弧・ジャンプの記号（文字の記号は一番上のパートだけに書く）
+        // 繰り返し・番括弧・ジャンプの記号（文字の記号は一番上の段だけに書く）
         const d = measureDecor(song, m);
         if (d.repStart) stave.setBegBarType(vf.BarlineType.REPEAT_BEGIN);
         if (d.repEnd) stave.setEndBarType(vf.BarlineType.REPEAT_END);
-        if (pi === 0) {
+        if (ri === 0) {
           if (d.volta) {
             const vt = d.volta.start && d.volta.end ? vf.VoltaType.BEGIN_END : d.volta.start ? vf.VoltaType.BEGIN : d.volta.end ? vf.VoltaType.END : vf.VoltaType.MID;
             stave.setVoltaType(vt, d.volta.start ? d.volta.label : '', 0);
@@ -194,11 +200,11 @@ function StaffLine({
           if (mk.jump) stave.setRepetitionType(R[JUMP_REP[mk.jump]], 0);
         }
         stave.setContext(ctx).draw();
-        const { items, tuplets } = measureItems(p.events, m * mLen, mLen, p.tuplets);
-        const notes = items.map((it) => makeNote(vf, it, shamisen));
+        const { items, tuplets } = measureItems(row.events, m * mLen, mLen, p.tuplets);
+        const notes = items.map((it) => makeNote(vf, it, row.octaveDown, row.clef));
         items.forEach((it, i) => {
           const t = m * mLen + it.start;
-          const inCursor = cursor?.part === pi && cursor.t >= t && cursor.t < t + it.ticks;
+          const inCursor = cursor?.part === pi && cursor.t >= t && cursor.t < t + it.ticks && (it.midi !== undefined || !row.pair);
           const inSel = selection?.part === pi && t >= selection.a && t < selection.b;
           const playing = playT !== null && playT >= t && playT < t + it.ticks && it.midi !== undefined;
           const color = playing ? lit : inCursor || inSel ? accent : null;
@@ -226,7 +232,7 @@ function StaffLine({
           }
           prevNote = notes[i];
           prevTieOpen = it.tieStart;
-          hits.current[pi].push({ x: notes[i].getAbsoluteX(), t: m * mLen + it.start });
+          hits.current[ri].push({ x: notes[i].getAbsoluteX(), t: m * mLen + it.start });
         });
         x += w;
       });
@@ -235,25 +241,42 @@ function StaffLine({
         new vf.StaveTie({ first_note: prevNote, last_note: null, first_indices: [0], last_indices: [0] }).setContext(ctx).draw();
       }
     });
+
+    // 大譜表：2段を括弧（ブレース）と小節線でつなぐ
+    rows.forEach((row, ri) => {
+      if (row.pair !== 'top') return;
+      const top = staves[ri];
+      const bottom = staves[ri + 1];
+      if (!bottom) return;
+      const C = vf.StaveConnector.type;
+      new vf.StaveConnector(top[0], bottom[0]).setType(C.BRACE).setContext(ctx).draw();
+      new vf.StaveConnector(top[0], bottom[0]).setType(C.SINGLE_LEFT).setContext(ctx).draw();
+      top.forEach((st, mi) => new vf.StaveConnector(st, bottom[mi]).setType(C.SINGLE_RIGHT).setContext(ctx).draw());
+    });
   }, [vf, song, measures, widths, editIdx, cursor, selection, playT, dims.staffH, dims.top]);
 
   const click = (e: React.MouseEvent<HTMLDivElement>) => {
     const r = box.current!.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    const pi = Math.max(0, Math.min(song.parts.length - 1, Math.floor((y - dims.top + 20) / dims.staffH)));
-    const row = hits.current[pi];
+    const rows = staffRows(song);
+    const ri = Math.max(0, Math.min(rows.length - 1, Math.floor((y - dims.top + 20) / dims.staffH)));
+    const row = hits.current[ri];
     if (!row?.length) return;
     let best = row[0];
     for (const h of row) if (Math.abs(h.x - x) < Math.abs(best.x - x)) best = h;
-    onSelect(pi, best.t, e.shiftKey);
+    onSelect(rows[ri].pi, best.t, e.shiftKey);
   };
 
   return (
     <div className="staff-line" data-block>
       <div className="staff-labels" style={{ width: dims.labelW }}>
         {song.parts.map((p, pi) => (
-          <div key={p.id} className={`staff-label${pi === editIdx ? ' editing' : ''}${p.muted ? ' muted' : ''}`} style={{ top: dims.top + pi * dims.staffH + 24 }}>
+          <div
+            key={p.id}
+            className={`staff-label${pi === editIdx ? ' editing' : ''}${p.muted ? ' muted' : ''}`}
+            style={{ top: dims.top + staffRows(song).findIndex((r) => r.pi === pi) * dims.staffH + 24 }}
+          >
             <span className="swatch" style={{ background: PART_COLORS[pi % PART_COLORS.length] }} />
             <span className="row-label-text">{p.name || `パート${pi + 1}`}</span>
           </div>
@@ -264,15 +287,47 @@ function StaffLine({
   );
 }
 
-function makeNote(vf: VexFlow, it: Item, shamisen: boolean) {
+/** 五線の段。ピアノの大譜表は1つのパートが2段（ト音記号・ヘ音記号）になる */
+interface StaffRow {
+  pi: number;
+  clef: 'treble' | 'bass';
+  octaveDown: boolean;
+  events: Ev[];
+  /** 大譜表の上の段・下の段 */
+  pair?: 'top' | 'bottom';
+}
+
+export const staffModeOf = (p: Part): 'grand' | 'treble' | 'bass' => (p.instrument === 'piano' ? (p.staff ?? 'grand') : 'treble');
+
+/** 真ん中のド（C4）から上はト音記号、下はヘ音記号 */
+const SPLIT = 60;
+
+function onlyNotes(events: Ev[], keep: (midi: number) => boolean): Ev[] {
+  return events.map((e) => (isNote(e) && !keep(e.midi) ? { dur: e.dur } : e));
+}
+
+function staffRows(song: Song): StaffRow[] {
+  const rows: StaffRow[] = [];
+  song.parts.forEach((p, pi) => {
+    const mode = staffModeOf(p);
+    const octaveDown = instrumentDef(p.instrument).clef === 'treble8vb';
+    if (mode === 'grand') {
+      rows.push({ pi, clef: 'treble', octaveDown: false, events: onlyNotes(p.events, (m) => m >= SPLIT), pair: 'top' });
+      rows.push({ pi, clef: 'bass', octaveDown: false, events: onlyNotes(p.events, (m) => m < SPLIT), pair: 'bottom' });
+    } else rows.push({ pi, clef: mode === 'bass' ? 'bass' : 'treble', octaveDown, events: p.events });
+  });
+  return rows;
+}
+
+function makeNote(vf: VexFlow, it: Item, octaveDown: boolean, clef: 'treble' | 'bass') {
   const dur = it.value + (it.midi === undefined ? 'r' : '');
-  let key = 'b/4';
+  let key = clef === 'bass' ? 'd/3' : 'b/4';
   if (it.midi !== undefined) {
     // 三味線はギターと同じく1オクターブ上に書く
-    const sp = spell(it.midi + (shamisen ? 12 : 0));
+    const sp = spell(it.midi + (octaveDown ? 12 : 0));
     key = `${sp.step.toLowerCase()}${sp.alter ? '#' : ''}/${sp.octave}`;
   }
-  const n = new vf.StaveNote({ keys: [key], duration: dur, dots: it.dots, auto_stem: true });
+  const n = new vf.StaveNote({ keys: [key], duration: dur, dots: it.dots, auto_stem: true, clef });
   if (it.dots) vf.Dot.buildAndAttach([n], { all: true });
   return n;
 }

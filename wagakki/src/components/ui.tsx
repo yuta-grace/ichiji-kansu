@@ -147,17 +147,29 @@ export function Dialog({
   actions?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // 画面の側から閉じたとき（open が false になったとき）は onClose を呼ばない。
+  // 呼ぶと、別のダイアログに切り替えた直後に状態を消してしまう
+  const closingByProp = useRef(false);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
     if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
+    if (!open && d.open) {
+      closingByProp.current = true;
+      d.close();
+    }
   }, [open]);
   return (
     <dialog
       ref={ref}
       className="dialog"
-      onClose={onClose}
+      onClose={() => {
+        if (closingByProp.current) {
+          closingByProp.current = false;
+          return;
+        }
+        onClose();
+      }}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}

@@ -58,6 +58,8 @@ export interface Part {
   /** 曲の頭から終わりまで隙間なく並ぶ（休みも1つの要素） */
   events: Ev[];
   tuplets: Tuplet[];
+  /** ピアノの五線譜：大譜表（ト音記号＋ヘ音記号、標準）・ト音記号だけ・ヘ音記号だけ */
+  staff?: 'grand' | 'treble' | 'bass';
 }
 
 export interface Song {
@@ -95,6 +97,7 @@ export function newPart(instrument: Instrument, sun: number, tuning: Tuning, len
     muted: false,
     events: [{ dur: len }],
     tuplets: [],
+    ...(instrument === 'piano' ? { staff: 'grand' as const } : {}),
   };
 }
 
@@ -499,6 +502,7 @@ export function parseSong(json: unknown): Song {
     muted: !!p.muted,
     events: o.version === 1 ? fromV1Beats(p.beats) : parseEvents(p.events),
     tuplets: parseTuplets(p.tuplets),
+    ...(p.staff === 'grand' || p.staff === 'treble' || p.staff === 'bass' ? { staff: p.staff as Part['staff'] } : {}),
   }));
   if (!s.parts.length) throw new Error('パートがありません');
   // 前の形式には楽譜全体の楽器が無いので、最初のパートの楽器にする

@@ -190,23 +190,33 @@ const diatonic = (midi: number) => {
   return sp.octave * 7 + 'CDEFGAB'.indexOf(sp.step);
 };
 const E4 = 4 * 7 + 2; // ト音記号の一番下の線
+const G2 = 2 * 7 + 4; // ヘ音記号の一番下の線
+
+interface Frame {
+  bottomY: number;
+  height: number;
+  /** 一番下の線の音（白鍵で数えた高さ） */
+  bottom: number;
+}
 
 /** 行全体で共通の、五線の上下の位置（低い音・高い音の加線が収まる高さ） */
-function staffFrame(lo: number, hi: number): { bottomY: number; height: number } {
-  const below = Math.max(0, E4 - diatonic(lo)) * (LINE_GAP / 2);
-  const above = Math.max(0, diatonic(hi) - (E4 + 8)) * (LINE_GAP / 2);
+function staffFrame(lo: number, hi: number, bass = false): Frame {
+  const bottom = bass ? G2 : E4;
+  const below = Math.max(0, bottom - diatonic(lo)) * (LINE_GAP / 2);
+  const above = Math.max(0, diatonic(hi) - (bottom + 8)) * (LINE_GAP / 2);
   const bottomY = 4 * LINE_GAP + above + 10;
-  return { bottomY, height: bottomY + below + 10 };
+  return { bottomY, height: bottomY + below + 10, bottom };
 }
 
 /** 続いた五線の上の1音（読み替え表の五線譜の行） */
-function StaffNote({ midi, frame }: { midi: number; frame: { bottomY: number; height: number } }) {
+function StaffNote({ midi, frame }: { midi: number; frame: Frame }) {
   const sp = spell(midi);
   const dn = diatonic(midi);
-  const y = frame.bottomY - (dn - E4) * (LINE_GAP / 2);
+  const B = frame.bottom;
+  const y = frame.bottomY - (dn - B) * (LINE_GAP / 2);
   const ledgers: number[] = [];
-  for (let d = E4 - 2; d >= dn; d -= 2) ledgers.push(frame.bottomY - (d - E4) * (LINE_GAP / 2));
-  for (let d = E4 + 10; d <= dn; d += 2) ledgers.push(frame.bottomY - (d - E4) * (LINE_GAP / 2));
+  for (let d = B - 2; d >= dn; d -= 2) ledgers.push(frame.bottomY - (d - B) * (LINE_GAP / 2));
+  for (let d = B + 10; d <= dn; d += 2) ledgers.push(frame.bottomY - (d - B) * (LINE_GAP / 2));
   return (
     <svg className="staff-note" width="100%" height={frame.height} aria-label={noteName(midi, 'cde', true)}>
       {[0, 1, 2, 3, 4].map((i) => (
@@ -225,13 +235,14 @@ function StaffNote({ midi, frame }: { midi: number; frame: { bottomY: number; he
   );
 }
 
-/** 1音だけの小さな五線譜（鳴らすの画面の表示用。ト音記号） */
+/** 1音だけの小さな五線譜（鳴らすの画面の表示用）。真ん中のドより低い音はヘ音記号 */
 function MiniStaff({ midi }: { midi: number }) {
-  const frame = staffFrame(midi, midi);
+  const bass = midi < 60;
+  const frame = staffFrame(midi, midi, bass);
   return (
     <span className="mini-staff-wrap">
-      <span className="mini-clef" aria-hidden="true">
-        𝄞
+      <span className={`mini-clef${bass ? ' bass' : ''}`} aria-hidden="true">
+        {bass ? '𝄢' : '𝄞'}
       </span>
       <StaffNote midi={midi} frame={frame} />
     </span>
