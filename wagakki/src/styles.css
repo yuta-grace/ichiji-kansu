@@ -2089,3 +2089,133 @@ input[type='range'] {
 .score.compact.vertical {
   gap: 12px;
 }
+
+/* 読み替え */
+.read-chips {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.read-chips.in-dialog {
+  padding: 0;
+  border: 0;
+  flex-wrap: wrap;
+}
+.read-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px max(12px, env(safe-area-inset-right, 0px)) 16px max(12px, env(safe-area-inset-left, 0px));
+}
+.read-table {
+  border-collapse: collapse;
+  margin: 0 auto;
+  min-width: min(560px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  border-radius: 2px;
+}
+.read-table th {
+  position: sticky;
+  top: -12px;
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: var(--fs-s);
+  font-weight: 600;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap;
+  z-index: 1;
+}
+.read-table td {
+  padding: 4px 12px;
+  text-align: center;
+  border-bottom: 1px solid rgba(22, 24, 29, 0.08);
+  height: 46px;
+}
+.read-table tr {
+  cursor: pointer;
+}
+.read-table tbody tr:hover {
+  background: rgba(43, 78, 140, 0.06);
+}
+.read-table tr.octave td {
+  border-top: 1px solid rgba(22, 24, 29, 0.3);
+}
+.read-table tr.lit {
+  background: var(--play-weak);
+}
+.read-name {
+  font-size: var(--fs-l);
+  font-weight: 600;
+}
+.read-none {
+  color: var(--ink-2);
+  opacity: 0.4;
+}
+.read-sham {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.read-sham-main {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.read-str {
+  font-family: var(--font-kana);
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 3px;
+  color: var(--ink-2);
+}
+.read-sham-alt {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.mini-staff {
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+}
+.mini-staff line {
+  stroke: var(--ink);
+  stroke-width: 0.8;
+}
+.mini-staff ellipse,
+.mini-staff text {
+  fill: var(--ink);
+}
+.mini-clef {
+  font-family: 'Noto Music', serif;
+  font-size: 26px;
+}
+.mini-acc {
+  font-size: 12px;
+}
+.read-table td,
+.read-sham,
+.read-sham-alt,
+.read-name {
+  white-space: nowrap;
+}
+.read-sham {
+  flex-wrap: nowrap;
+}
+@media (max-width: 599px) {
+  .read-table th,
+  .read-table td {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .read-sham-alt {
+    display: none;
+  }
+}

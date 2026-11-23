@@ -16,6 +16,8 @@ export interface Settings {
   multiPart: boolean;
   /** 楽譜の表示：auto＝PC は仕上がり、スマホは編集しやすい表示 */
   scoreDensity: 'auto' | 'edit' | 'compact';
+  /** 読み替えの画面で表示する書き方 */
+  readColumns: ('shamisen' | 'shakuhachi' | 'doremi' | 'cde' | 'staff')[];
   /** 'auto'：見つかった琴古フォント、'kana'：カタカナ、それ以外：フォント名 */
   kinkoFont: string;
   theme: 'system' | 'light' | 'dark';
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   scoreView: 'auto',
   multiPart: false,
   scoreDensity: 'auto',
+  readColumns: ['shamisen', 'shakuhachi', 'doremi'],
   kinkoFont: 'auto',
   theme: 'system',
   instrument: 'shamisen',

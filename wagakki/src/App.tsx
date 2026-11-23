@@ -6,8 +6,9 @@ import { IconButton, Snackbar } from './components/ui';
 import { PlayScreen } from './screens/PlayScreen';
 import { ScoreScreen } from './screens/ScoreScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { ReadScreen } from './screens/ReadScreen';
 
-type Mode = 'score' | 'play';
+type Mode = 'score' | 'play' | 'read';
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
@@ -15,7 +16,7 @@ export function App() {
   const [mode, setMode] = useState<Mode>(() => {
     try {
       const m = localStorage.getItem('wagakki.mode');
-      return m === 'score' || m === 'play' ? m : 'play';
+      return m === 'score' || m === 'play' || m === 'read' ? m : 'play';
     } catch {
       return 'play';
     }
@@ -84,6 +85,9 @@ export function App() {
             <button type="button" className={mode === 'play' ? 'on' : ''} aria-current={mode === 'play' ? 'page' : undefined} onClick={() => setMode('play')}>
               演奏
             </button>
+            <button type="button" className={mode === 'read' ? 'on' : ''} aria-current={mode === 'read' ? 'page' : undefined} onClick={() => setMode('read')}>
+              読み替え
+            </button>
           </nav>
           <div className="appbar-slot" ref={setBarSlot} />
           <IconButton icon="settings" label="設定" onClick={() => setSettingsOpen(true)} />
@@ -91,6 +95,7 @@ export function App() {
         <main className="main">
           {mode === 'score' && <ScoreScreen />}
           {mode === 'play' && <PlayScreen />}
+          {mode === 'read' && <ReadScreen />}
         </main>
         {settingsOpen && (
           <div className="sheet" role="dialog" aria-modal="true" aria-label="設定">
