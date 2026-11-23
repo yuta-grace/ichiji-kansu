@@ -2219,3 +2219,118 @@ input[type='range'] {
     display: none;
   }
 }
+
+/* 読み替え表（横向き）：書き方ごとに1行、音は左から右へ */
+.read-scroll.horizontal {
+  display: flex;
+  align-items: flex-start;
+}
+.read-table.across {
+  margin: 0;
+  min-width: 0;
+}
+.read-table.across th {
+  position: sticky;
+  left: -12px;
+  top: auto;
+  text-align: left;
+  border-bottom: 1px solid rgba(22, 24, 29, 0.08);
+  border-right: 1px solid var(--line);
+  z-index: 1;
+}
+.read-table.across td {
+  min-width: 56px;
+  height: 56px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-left: 1px solid rgba(22, 24, 29, 0.06);
+}
+.read-table.across td.octave {
+  border-left: 1px solid rgba(22, 24, 29, 0.35);
+  border-top: 0;
+}
+.read-table.across td:hover {
+  background: rgba(43, 78, 140, 0.06);
+}
+.read-table.across td.lit {
+  background: var(--play-weak);
+}
+.read-table.across .read-sham {
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.read-table.across .read-sham-alt {
+  display: block;
+}
+
+/* 鳴らす：楽器の切り替えと、いま鳴った音の読み替え */
+.play-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  min-height: 56px;
+}
+.readout {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.readout-empty {
+  font-size: var(--fs-s);
+  color: var(--text-3);
+}
+.readout-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 56px;
+  padding: 2px 8px;
+  border-left: 1px solid var(--line);
+  color: var(--text);
+}
+.readout-cell:first-child {
+  border-left: 0;
+}
+.readout-label {
+  font-size: 10px;
+  color: var(--text-3);
+}
+.readout-cell .read-sham-alt {
+  display: none;
+}
+.readout-cell .mini-staff {
+  transform: scale(0.8);
+  margin: -6px 0;
+}
+.readout-cell .mini-staff line {
+  stroke: var(--text);
+}
+.readout-cell .mini-staff ellipse,
+.readout-cell .mini-staff text {
+  fill: var(--text);
+}
+@media (max-width: 599px) {
+  .play-strip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .play-strip .segmented {
+    align-self: flex-start;
+  }
+}
+.status-note {
+  color: var(--text);
+  font-weight: 600;
+}

@@ -15,7 +15,7 @@ import type { Instrument } from '../lib/instruments';
 
 export type ReadColumn = 'shamisen' | 'shakuhachi' | 'doremi' | 'cde' | 'staff';
 
-const COLUMNS: { id: ReadColumn; label: string }[] = [
+export const COLUMNS: { id: ReadColumn; label: string }[] = [
   { id: 'shamisen', label: '三味線（勘所）' },
   { id: 'shakuhachi', label: '尺八（ロツレチ）' },
   { id: 'doremi', label: 'ドレミ' },
@@ -76,6 +76,11 @@ export function ReadScreen() {
           <span className="bar-title-sub">押して寸法・調弦を変える</span>
         </button>
         <span className="spacer" />
+        <IconButton
+          icon={settings.readLayout === 'columns' ? 'rows' : 'columns'}
+          label={settings.readLayout === 'columns' ? '横に並べる（音を左から右へ）' : '縦に並べる（音を上から下へ）'}
+          onClick={() => update({ readLayout: settings.readLayout === 'columns' ? 'rows' : 'columns' })}
+        />
         <IconButton icon="edit" label="表示する書き方と寸法を選ぶ" onClick={() => setOpen(true)} />
       </BarSlot>
 
@@ -87,28 +92,54 @@ export function ReadScreen() {
         ))}
       </div>
 
-      <div className="read-scroll">
-        <table className="read-table">
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c}>{COLUMNS.find((x) => x.id === c)!.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((m) => (
-              <tr key={m} className={`${lit === m ? 'lit' : ''}${m % 12 === 0 ? ' octave' : ''}`} onClick={() => play(m)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && play(m)}>
+      {settings.readLayout === 'columns' ? (
+        <div className="read-scroll">
+          <table className="read-table">
+            <thead>
+              <tr>
                 {cols.map((c) => (
-                  <td key={c}>
-                    <Cell col={c} midi={m} settings={settings} />
-                  </td>
+                  <th key={c}>{COLUMNS.find((x) => x.id === c)!.label}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((m) => (
+                <tr key={m} className={`${lit === m ? 'lit' : ''}${m % 12 === 0 ? ' octave' : ''}`} onClick={() => play(m)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && play(m)}>
+                  {cols.map((c) => (
+                    <td key={c}>
+                      <Cell col={c} midi={m} settings={settings} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        // 横向き：横書きの楽譜と同じく、音を左から右へ。書き方ごとに1行
+        <div className="read-scroll horizontal">
+          <table className="read-table across">
+            <tbody>
+              {cols.map((c) => (
+                <tr key={c}>
+                  <th scope="row">{COLUMNS.find((x) => x.id === c)!.label.replace(/（.*）/, '')}</th>
+                  {rows.map((m) => (
+                    <td
+                      key={m}
+                      className={`${lit === m ? 'lit' : ''}${m % 12 === 0 ? ' octave' : ''}`}
+                      onClick={() => play(m)}
+                      tabIndex={c === cols[0] ? 0 : -1}
+                      onKeyDown={(e) => e.key === 'Enter' && play(m)}
+                    >
+                      <Cell col={c} midi={m} settings={settings} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Dialog open={open} title="読み替えの設定" onClose={() => setOpen(false)} actions={<Button onClick={() => setOpen(false)}>閉じる</Button>}>
         <div className="read-chips in-dialog">
@@ -136,7 +167,8 @@ export function ReadScreen() {
   );
 }
 
-function Cell({ col, midi, settings }: { col: ReadColumn; midi: number; settings: Settings }) {
+/** 1つの音を、指定の書き方で表示する（読み替え表・鳴らした音の表示で使う） */
+export function Cell({ col, midi, settings }: { col: ReadColumn; midi: number; settings: Settings }) {
   if (col === 'doremi') return <span className="read-name">{noteName(midi, 'doremi')}</span>;
   if (col === 'cde') return <span className="read-name">{noteName(midi, 'cde', true)}</span>;
   if (col === 'staff') return <MiniStaff midi={midi} />;

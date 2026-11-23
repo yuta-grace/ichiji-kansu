@@ -10,6 +10,13 @@ import { ReadScreen } from './screens/ReadScreen';
 
 type Mode = 'score' | 'play' | 'read';
 
+/** 道具（コンセプトの「鳴らす・書く・読み替える」。聴く・渡すは書くの中にある） */
+const MODES: { id: Mode; label: string }[] = [
+  { id: 'play', label: '鳴らす' },
+  { id: 'score', label: '書く' },
+  { id: 'read', label: '読み替え' },
+];
+
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   // 開いたときは前回使っていた画面。初めてのときは、すぐ音が出せる「演奏」
@@ -79,15 +86,11 @@ export function App() {
             和
           </span>
           <nav className="modes" aria-label="画面">
-            <button type="button" className={mode === 'score' ? 'on' : ''} aria-current={mode === 'score' ? 'page' : undefined} onClick={() => setMode('score')}>
-              楽譜
-            </button>
-            <button type="button" className={mode === 'play' ? 'on' : ''} aria-current={mode === 'play' ? 'page' : undefined} onClick={() => setMode('play')}>
-              演奏
-            </button>
-            <button type="button" className={mode === 'read' ? 'on' : ''} aria-current={mode === 'read' ? 'page' : undefined} onClick={() => setMode('read')}>
-              読み替え
-            </button>
+            {MODES.map((m) => (
+              <button key={m.id} type="button" className={mode === m.id ? 'on' : ''} aria-current={mode === m.id ? 'page' : undefined} onClick={() => setMode(m.id)}>
+                {m.label}
+              </button>
+            ))}
           </nav>
           <div className="appbar-slot" ref={setBarSlot} />
           <IconButton icon="settings" label="設定" onClick={() => setSettingsOpen(true)} />

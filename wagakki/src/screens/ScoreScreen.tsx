@@ -7,14 +7,15 @@ import { InstrumentPanel } from '../components/InstrumentPanel';
 import { InstrumentSelect, SunSelect, TuningSelect } from '../components/controls';
 import { Button, Dialog, IconButton, Segmented, Select, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
-import { honLabel, SUN_MAX, SUN_MIN, sunLabelWithNote } from '../lib/pitch';
+import { honLabel, noteName, SUN_MAX, SUN_MIN, sunLabelWithNote } from '../lib/pitch';
 import { tuningOf } from '../lib/shamisen';
 import { instrumentDef, INSTRUMENT_LIST } from '../lib/instruments';
 
 const NOTATION_LABEL: Record<ScoreNotation, string> = { bunka: '文化譜', kinko: '琴古譜', staff: '五線譜' };
 import { BarSlot } from '../components/BarSlot';
 import { useMedia } from '../components/useMedia';
-import { AuditionBar, type ScratchNote } from '../components/Audition';
+import { AuditionBar, scratchLabel, type ScratchNote } from '../components/Audition';
+import { playNote } from '../audio/engine';
 import {
   addTuplet,
   changeSun,
@@ -24,6 +25,7 @@ import {
   eventAt,
   extendAt,
   insertMeasureAt,
+  isNote,
   MAX_PARTS,
   measureLen,
   newPart,
@@ -236,6 +238,13 @@ export function ScoreScreen() {
   };
 
   const select = (pi: number, t: number, extend: boolean) => {
+    // 楽譜の音を押したら鳴らして確かめる（再生中は鳴らさない）
+    const p = latest.current.parts[pi];
+    const hit = p ? eventAt(p.events, t) : null;
+    if (hit && isNote(hit) && hit.start === t && playBeat === null) {
+      const v = playNote(p.instrument, hit.midi, { gain: p.volume, a4: settings.a4 });
+      if (p.instrument !== 'shamisen') window.setTimeout(() => v.stop(), 450);
+    }
     const samePart = pi === cursor.part;
     if (pi !== editIdx) setEditIdx(pi);
     if ((extend || rangeMode) && samePart && anchor !== null) {
@@ -498,6 +507,8 @@ export function ScoreScreen() {
     .filter(Boolean)
     .join('　');
   const showParts = settings.multiPart || song.parts.length > 1;
+  const cursorEv = eventAt(edit.events, cursor.t);
+  const cursorNote = cursorEv && isNote(cursorEv) ? { midi: cursorEv.midi, str: cursorEv.str } : null;
   const compact = settings.scoreDensity === 'auto' ? wide : settings.scoreDensity === 'compact';
   const order = playOrder(song);
 
@@ -704,6 +715,12 @@ export function ScoreScreen() {
           {curMeasure}小節 {beatText}
         </span>
         <span>長さ {tupletAt(edit.tuplets, cursor.t) ? '3連の中（1/3ずつ）' : durText}</span>
+        {cursorNote && (
+          <span className="status-note">
+            {scratchLabel(cursorNote, edit.instrument, edit.sun, edit.tuning, settings.nameStyle)}
+            {edit.instrument !== 'piano' && `（${noteName(cursorNote.midi, settings.nameStyle, true)}）`}
+          </span>
+        )}
         {selection && <span>範囲選択中</span>}
         {order.warnings.length > 0 && (
           <button type="button" className="status-warn" onClick={() => setDlg('marks')}>

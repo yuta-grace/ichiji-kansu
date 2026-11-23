@@ -8,10 +8,13 @@ import { BarSlot } from '../components/BarSlot';
 import { honLabel, sunLabelWithNote } from '../lib/pitch';
 import { tuningOf } from '../lib/shamisen';
 import { instrumentDef } from '../lib/instruments';
+import { Cell, COLUMNS } from './ReadScreen';
 
 export function PlayScreen() {
   const { settings, update } = useApp();
   const [open, setOpen] = useState(false);
+  const [last, setLast] = useState<number | null>(null);
+  const readCols = settings.readColumns.length ? settings.readColumns : (['doremi'] as const);
   const inst = settings.instrument;
   const sun = inst === 'shamisen' ? settings.shamisenSun : settings.shakuhachiSun;
   const def = instrumentDef(inst);
@@ -25,14 +28,29 @@ export function PlayScreen() {
       <BarSlot>
         <button type="button" className="bar-title" onClick={() => setOpen(true)} title="楽器・寸法・調弦を選ぶ">
           <span className="bar-title-main">{summary}</span>
-          <span className="bar-title-sub">押して楽器を選ぶ</span>
+          <span className="bar-title-sub">押して寸法・調弦を変える</span>
         </button>
         <span className="spacer" />
         {inst !== 'piano' && (
           <IconButton icon="piano" label="ドレミ（ピアノ鍵盤）の表示" selected={settings.showPiano} onClick={() => update({ showPiano: !settings.showPiano })} />
         )}
       </BarSlot>
-      <InstrumentPanel instrument={inst} sun={sun} tuning={settings.shamisenTuning} />
+      <div className="play-strip">
+        <InstrumentSelect value={inst} onChange={(v) => update({ instrument: v })} />
+        <div className="readout" aria-live="polite" aria-label="いま鳴った音">
+          {last === null ? (
+            <span className="readout-empty">押した音が、ここに読み替えて出ます</span>
+          ) : (
+            readCols.map((c) => (
+              <span key={c} className="readout-cell" title={COLUMNS.find((x) => x.id === c)?.label}>
+                <span className="readout-label">{COLUMNS.find((x) => x.id === c)?.label.replace(/（.*）/, '')}</span>
+                <Cell col={c} midi={last} settings={settings} />
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+      <InstrumentPanel instrument={inst} sun={sun} tuning={settings.shamisenTuning} onNote={(m) => setLast(m)} />
 
       <Dialog open={open} title="楽器の設定" onClose={() => setOpen(false)} actions={<Button onClick={() => setOpen(false)}>閉じる</Button>}>
         <div className="field-row">
