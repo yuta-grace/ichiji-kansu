@@ -229,7 +229,14 @@ function VerticalScore({ song, editIdx, cursor, selection, playBeat, onSelect, p
   const cursorLine = cursor ? lines.findIndex((l) => l.includes(Math.floor(cursor.t / PPQ / bpm))) : -1;
   useEffect(() => {
     if (cursorLine < 0 || printMode) return;
-    ref.current?.querySelector(`[data-line="${cursorLine}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // 楽譜の枠だけを動かす（scrollIntoView は画面全体まで動かしてしまうので使わない）
+    const scroller = ref.current?.parentElement;
+    const el = ref.current?.querySelector<HTMLElement>(`[data-line="${cursorLine}"]`);
+    if (!scroller || !el) return;
+    const a = el.getBoundingClientRect();
+    const b = scroller.getBoundingClientRect();
+    if (a.left < b.left) scroller.scrollLeft -= b.left - a.left + 8;
+    else if (a.right > b.right) scroller.scrollLeft += a.right - b.right + 8;
   }, [cursorLine, printMode]);
 
   return (

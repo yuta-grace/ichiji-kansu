@@ -58,7 +58,9 @@ export function AuditionBar({
   useEffect(() => stop, []);
 
   useEffect(() => {
-    listRef.current?.lastElementChild?.scrollIntoView({ block: 'nearest', inline: 'end' });
+    // 並びの右端を見せる（画面全体は動かさない）
+    const el = listRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
   }, [notes.length]);
 
   const play = () => {

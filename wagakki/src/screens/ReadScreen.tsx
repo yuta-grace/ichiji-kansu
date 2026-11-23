@@ -150,8 +150,8 @@ export function ReadScreen() {
 }
 
 /** 1つの音を、指定の書き方で表示する（読み替え表・鳴らした音の表示で使う） */
-export function Cell({ col, midi, settings }: { col: ReadColumn; midi: number; settings: Settings }) {
-  if (col === 'doremi') return <span className="read-name">{noteName(midi, 'doremi')}</span>;
+export function Cell({ col, midi, settings, withOctave }: { col: ReadColumn; midi: number; settings: Settings; withOctave?: boolean }) {
+  if (col === 'doremi') return <span className="read-name">{noteName(midi, 'doremi', withOctave)}</span>;
   if (col === 'cde') return <span className="read-name">{noteName(midi, 'cde', true)}</span>;
   if (col === 'staff') return <MiniStaff midi={midi} />;
   if (col === 'shakuhachi') {

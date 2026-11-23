@@ -240,10 +240,11 @@ export function playPiano(midi: number, opts: PlayOpts = {}): Voice {
   const vol = (opts.gain ?? 0.8) * 0.32;
   const g = c.createGain();
   // 高い音ほど早く減衰する
-  const decay = Math.max(0.6, 3.2 - (midi - 48) * 0.05);
+  // 低い音ほど長く伸びる（A0 で約8秒、C4 で約5秒、C8 で約1秒）
+  const decay = Math.max(1, 8 - (midi - 21) * 0.08);
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(vol, t + 0.006);
-  g.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.25);
+  g.gain.exponentialRampToValueAtTime(vol * 0.45, t + 0.3);
   g.gain.exponentialRampToValueAtTime(0.0008, t + decay);
   const tone = c.createBiquadFilter();
   tone.type = 'lowpass';
@@ -274,10 +275,10 @@ export function playPiano(midi: number, opts: PlayOpts = {}): Voice {
       stopped = true;
       const s = Math.max(when ?? c.currentTime, t + 0.03);
       g.gain.cancelScheduledValues(s);
-      g.gain.setTargetAtTime(0, s, 0.06);
+      g.gain.setTargetAtTime(0, s, 0.16); // 鍵盤を離すと、ダンパーで少しの余韻を残して止まる
       for (const o of oscs) {
         try {
-          o.stop(s + 0.4);
+          o.stop(s + 1);
         } catch {
           /* 既に止まっている */
         }

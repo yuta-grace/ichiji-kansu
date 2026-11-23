@@ -101,17 +101,18 @@ const SHAKU_ACTIONS: KeyAction[] = [
   ...SHAKU_FINGERS.map((f) => ({ id: f.id, label: f.label, group: '指（押している間鳴る）' })),
   ...SHAKU_MODS.map((m) => ({ id: m.id, label: m.label, group: '押しながら（変化）' })),
 ];
+// 右手のホームポジションで指（ロツレチリ）、左手のホームポジションで変化を押さえる（密集しないように左右に分ける）
 const SHAKU_DEFAULT: Keymap = {
-  ro: 'KeyA',
-  tsu: 'KeyS',
-  re: 'KeyD',
-  chi: 'KeyF',
-  ri: 'KeyG',
-  meri: 'ShiftLeft',
-  daimeri: 'KeyZ',
-  kari: 'KeyX',
+  ro: 'KeyJ',
+  tsu: 'KeyK',
+  re: 'KeyL',
+  chi: 'Semicolon',
+  ri: 'Quote',
+  daikan: 'KeyA',
+  daimeri: 'KeyS',
+  meri: 'KeyD',
+  kari: 'KeyF',
   kan: 'Space',
-  daikan: 'KeyV',
 };
 
 export const KEY_ACTIONS: Record<Instrument, KeyAction[]> = { piano: PIANO_ACTIONS, shamisen: SHAMISEN_ACTIONS, shakuhachi: SHAKU_ACTIONS };

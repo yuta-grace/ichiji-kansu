@@ -7,6 +7,7 @@ const WHITE_W = 40;
 
 export function Piano({
   big,
+  keyHints,
   range,
   active,
   basePc,
@@ -16,6 +17,8 @@ export function Piano({
 }: {
   /** ピアノが主役のとき（大きく表示） */
   big?: boolean;
+  /** PC のキーの位置（音 → キーの名前） */
+  keyHints?: Record<number, string>;
   range: [number, number];
   active: Set<number>;
   /** 移動ドの「ド」 */
@@ -89,6 +92,7 @@ export function Piano({
             aria-label={noteName(m, settings.nameStyle, true)}
             {...handlers(m)}
           >
+            {keyHints?.[m] && <kbd className="key-hint">{keyHints[m]}</kbd>}
             <span className="key-label">{label(m)}</span>
             {pc(m) === 0 && <span className="key-oct">{noteName(m, 'cde', true)}</span>}
           </button>
@@ -106,6 +110,7 @@ export function Piano({
                 aria-label={noteName(m, settings.nameStyle, true)}
                 {...handlers(m)}
               >
+                {keyHints?.[m] && <kbd className="key-hint">{keyHints[m]}</kbd>}
                 <span className="key-label">{label(m)}</span>
               </button>
             );

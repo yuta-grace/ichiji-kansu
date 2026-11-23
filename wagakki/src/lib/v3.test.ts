@@ -222,7 +222,8 @@ describe('ピアノの大譜表', () => {
 describe('キー割り当て', () => {
   it('標準の割り当てに、変えた分を重ねる', async () => {
     const { keymapFor, actionOf } = await import('./keymaps');
-    expect(actionOf(keymapFor('shakuhachi'), 'KeyA')).toBe('ro');
+    expect(actionOf(keymapFor('shakuhachi'), 'KeyJ')).toBe('ro');
+    expect(actionOf(keymapFor('shakuhachi'), 'KeyD')).toBe('meri');
     expect(actionOf(keymapFor('shamisen'), 'KeyJ')).toBe('str0');
     expect(actionOf(keymapFor('piano', { piano: { n0: 'KeyQ' } }), 'KeyQ')).toBe('n0');
   });

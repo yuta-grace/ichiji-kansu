@@ -2452,3 +2452,232 @@ input[type='range'] {
   background: var(--panel-2);
   white-space: nowrap;
 }
+
+/* ピアノの鍵盤に PC のキーの位置を表示 */
+.key-hint {
+  font-family: var(--font);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  margin-bottom: auto;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: var(--accent-weak);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.key.black .key-hint {
+  font-size: 9px;
+  padding: 1px 3px;
+  background: rgba(140, 175, 234, 0.25);
+  color: #dfe8fa;
+  border-color: #8cafea;
+}
+@media (pointer: coarse) {
+  .key-hint {
+    display: none;
+  }
+}
+
+/* 書く：画面上のキーパッド（フリック入力） */
+.score-keypad {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  overflow: auto;
+}
+.keypad-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.keypad-hint {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.keypad-octave {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-m);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.flickpad {
+  display: grid;
+  grid-template-columns: 1fr 76px;
+  gap: 6px;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.flick-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.flick-key {
+  position: relative;
+  min-height: 54px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  touch-action: none;
+  padding: 0;
+}
+.flick-key.empty {
+  opacity: 0.35;
+}
+.flick-key.pressed {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+}
+.flick-center {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--font-kana);
+}
+.flick-hint {
+  position: absolute;
+  font-size: 9px;
+  color: var(--text-3);
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.flick-hint.up {
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.flick-hint.down {
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.flick-hint.left {
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.flick-hint.right {
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+/* 押している間の候補（キーの上に大きく） */
+.flick-guide {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 168px;
+  height: 168px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template: 'a up b' 1fr 'left center right' 1fr 'c down d' 1fr / 1fr 1fr 1fr;
+  gap: 2px;
+  z-index: 10;
+  pointer-events: none;
+}
+.flick-guide-cell {
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-kana);
+  color: var(--text);
+  white-space: nowrap;
+}
+.flick-guide-cell.up {
+  grid-area: up;
+}
+.flick-guide-cell.down {
+  grid-area: down;
+}
+.flick-guide-cell.left {
+  grid-area: left;
+}
+.flick-guide-cell.right {
+  grid-area: right;
+}
+.flick-guide-cell.center {
+  grid-area: center;
+}
+.flick-guide-cell.none {
+  visibility: hidden;
+}
+.flick-guide-cell.on {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.flick-actions {
+  display: grid;
+  grid-auto-rows: minmax(54px, auto);
+  gap: 6px;
+}
+.flick-action {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+}
+.flick-action-text {
+  font-size: var(--fs-s);
+  font-weight: 600;
+}
+.flick-guide.at-left {
+  left: 0;
+  transform: translate(-12px, -50%);
+}
+.flick-guide.at-right {
+  left: auto;
+  right: 0;
+  transform: translate(12px, -50%);
+}
+/* 画面全体が横に動かないように */
+html,
+body {
+  overflow-x: hidden;
+}
+.app {
+  overflow: hidden;
+}
+/* 画面の枠は、フォーカスなどで横に動かないようにする */
+.app {
+  overflow: clip;
+}
+.appbar {
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  .modes button {
+    padding: 0 6px;
+    font-size: var(--fs-s);
+  }
+  .appbar .field select {
+    width: 68px;
+    padding-left: 8px;
+    padding-right: 20px;
+  }
+  .appbar-slot {
+    gap: 2px;
+  }
+  .appbar .bar-group {
+    padding: 0 2px;
+  }
+}

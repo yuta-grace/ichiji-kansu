@@ -4,7 +4,7 @@ import { useApp } from '../context';
 import { playNote, type Voice } from '../audio/engine';
 import { pc } from '../lib/pitch';
 import { fingeringFor, openStrings, type Tuning } from '../lib/shamisen';
-import { actionOf, keymapFor, SHAKU_FINGERS, SHAKU_MODS } from '../lib/keymaps';
+import { actionOf, keyLabel, keymapFor, SHAKU_FINGERS, SHAKU_MODS } from '../lib/keymaps';
 import { instrumentDef } from '../lib/instruments';
 import type { Instrument } from '../lib/score';
 import { ShamisenNeck } from './ShamisenNeck';
@@ -18,6 +18,7 @@ export function InstrumentPanel({
   external,
   onNote,
   volume = 0.85,
+  hidden,
 }: {
   instrument: Instrument;
   sun: number;
@@ -26,9 +27,12 @@ export function InstrumentPanel({
   external?: Set<number>;
   onNote?: (midi: number, string?: number) => void;
   volume?: number;
+  /** 画面には出さず、PC のキーボードでだけ使う（キーパッドを出しているとき） */
+  hidden?: boolean;
 }) {
   const { settings } = useApp();
   const voices = useRef(new Map<number, Voice>());
+  const pedalVoices = useRef<Voice[]>([]);
   const [held, setHeld] = useState<Map<number, number>>(new Map()); // pointerId → midi
   const [pressed, setPressed] = useState<{ string: number; pos: number } | null>(null);
   const [flash, setFlash] = useState<number | null>(null);
@@ -73,7 +77,9 @@ export function InstrumentPanel({
   const up = (pointerId: number) => {
     const v = voices.current.get(pointerId);
     if (v) {
-      v.stop();
+      // ピアノのペダルを踏んでいる間は、離しても自然に消えるまで鳴らす
+      if (instrument === 'piano' && settings.pianoPedal) pedalVoices.current.push(v);
+      else v.stop();
       voices.current.delete(pointerId);
     }
     setHeld((h) => {
@@ -169,11 +175,28 @@ export function InstrumentPanel({
     };
   }, [instrument, sun, tuning, oct, settings.keymaps]);
 
+  // ペダルを離したら、鳴り続けていた音を止める
+  useEffect(() => {
+    if (settings.pianoPedal) return;
+    pedalVoices.current.forEach((v) => v.stop());
+    pedalVoices.current = [];
+  }, [settings.pianoPedal]);
+
+  // 画面の鍵盤に、PC のキーの位置を表示する（オクターブを変えると一緒に動く）
+  const keyHints = useMemo(() => {
+    if (instrument !== 'piano') return undefined;
+    const map = keymapFor('piano', settings.keymaps);
+    const out: Record<number, string> = {};
+    for (const [a, code] of Object.entries(map)) if (/^n\d+$/.test(a)) out[60 + Number(a.slice(1)) + oct * 12] = keyLabel(code);
+    return out;
+  }, [instrument, settings.keymaps, oct]);
+
   const basePc = pc(instrumentDef(instrument).base(sun));
+  if (hidden) return null;
 
   return (
     <div className="instrument-panel">
-      {oct !== 0 && <div className="oct-badge">キーボード：{oct > 0 ? `+${oct}` : oct} オクターブ</div>}
+      {instrument === 'piano' && oct !== 0 && <div className="oct-badge">キーボードの A ＝ C{4 + oct}</div>}
       {instrument !== 'piano' && (
       <div className="instrument-body">
         {instrument === 'shamisen' ? (
@@ -196,6 +219,7 @@ export function InstrumentPanel({
       {(settings.showPiano || instrument === 'piano') && (
         <Piano
           big={instrument === 'piano'}
+          keyHints={keyHints}
           range={instrument === 'piano' ? range : [range[0] - 2, range[1] + 2]}
           active={active}
           basePc={basePc}

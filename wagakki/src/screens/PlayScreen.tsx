@@ -34,6 +34,17 @@ export function PlayScreen() {
         {inst !== 'piano' && (
           <IconButton icon="piano" label="ドレミ（ピアノ鍵盤）の表示" selected={settings.showPiano} onClick={() => update({ showPiano: !settings.showPiano })} />
         )}
+        {inst === 'piano' && (
+          <button
+            type="button"
+            className={`chip-btn${settings.pianoPedal ? ' on' : ''}`}
+            aria-pressed={settings.pianoPedal}
+            onClick={() => update({ pianoPedal: !settings.pianoPedal })}
+            title="ペダル：鍵盤を離しても、自然に消えるまで鳴り続ける"
+          >
+            ペダル
+          </button>
+        )}
       </BarSlot>
       <div className="play-strip">
         <InstrumentSelect value={inst} onChange={(v) => update({ instrument: v })} />
@@ -44,7 +55,7 @@ export function PlayScreen() {
             readCols.map((c) => (
               <span key={c} className="readout-cell" title={COLUMNS.find((x) => x.id === c)?.label}>
                 <span className="readout-label">{COLUMNS.find((x) => x.id === c)?.label.replace(/（.*）/, '')}</span>
-                <Cell col={c} midi={last} settings={settings} />
+                <Cell col={c} midi={last} settings={settings} withOctave />
               </span>
             ))
           )}

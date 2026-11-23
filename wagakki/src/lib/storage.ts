@@ -16,6 +16,10 @@ export interface Settings {
   multiPart: boolean;
   /** 楽譜の表示：auto＝PC は仕上がり、スマホは編集しやすい表示 */
   scoreDensity: 'auto' | 'edit' | 'compact';
+  /** ピアノのペダル（押している間だけでなく、離しても鳴り続ける） */
+  pianoPedal: boolean;
+  /** 書くの入力：楽器の画面か、画面上のキーパッド */
+  inputSurface: 'instrument' | 'keypad';
   /** PC のキー割り当て（楽器ごと。変えた分だけ持つ） */
   keymaps: Partial<Record<Instrument, Record<string, string>>>;
   /** 読み替えの画面で表示する書き方 */
@@ -41,6 +45,8 @@ export const DEFAULT_SETTINGS: Settings = {
   multiPart: false,
   scoreDensity: 'auto',
   keymaps: {},
+  pianoPedal: false,
+  inputSurface: 'instrument',
   readColumns: ['shamisen', 'shakuhachi', 'doremi'],
   kinkoFont: 'auto',
   theme: 'system',

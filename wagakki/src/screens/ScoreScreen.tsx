@@ -15,6 +15,7 @@ const NOTATION_LABEL: Record<ScoreNotation, string> = { bunka: '文化譜', kink
 import { BarSlot } from '../components/BarSlot';
 import { useMedia } from '../components/useMedia';
 import { AuditionBar, scratchLabel, type ScratchNote } from '../components/Audition';
+import { ScoreKeypad } from '../components/ScoreKeypad';
 import { playNote } from '../audio/engine';
 import { usesKey } from '../lib/keymaps';
 import {
@@ -609,12 +610,14 @@ export function ScoreScreen() {
             />
           </div>
         )}
-        <IconButton
-          icon="compact"
-          label={compact ? '編集しやすい表示にする' : '仕上がり表示にする（小節を詰めて1行に多く）'}
-          selected={compact}
-          onClick={() => update({ scoreDensity: compact ? 'edit' : 'compact' })}
-        />
+        <span className="hide-small">
+          <IconButton
+            icon="compact"
+            label={compact ? '編集しやすい表示にする' : '仕上がり表示にする（小節を詰めて1行に多く）'}
+            selected={compact}
+            onClick={() => update({ scoreDensity: compact ? 'edit' : 'compact' })}
+          />
+        </span>
         <div className="bar-group transport">
           <button type="button" className="tempo-btn hide-narrow" onClick={() => setDlg('song')} title="テンポ">
             ♩={song.tempo}
@@ -642,6 +645,12 @@ export function ScoreScreen() {
             <div className="tool-group">
               <Tool icon="redo" label="やり直す" onClick={redo} disabled={!future.current.length} />
               <Tool icon="loop" label="くり返し再生" active={loop} onClick={() => setLoop((l) => !l)} />
+              <Tool
+                icon="compact"
+                label={compact ? '編集しやすい表示にする' : '仕上がり表示にする'}
+                active={compact}
+                onClick={() => update({ scoreDensity: compact ? 'edit' : 'compact' })}
+              />
             </div>
             {editTools}
           </div>
@@ -697,6 +706,12 @@ export function ScoreScreen() {
             {instText}
           </button>
           <span className="spacer" />
+          <IconButton
+            icon="keypad"
+            label={settings.inputSurface === 'keypad' ? '楽器の画面で入力する' : 'キーパッドで入力する（フリック）'}
+            selected={settings.inputSurface === 'keypad'}
+            onClick={() => update({ inputSurface: settings.inputSurface === 'keypad' ? 'instrument' : 'keypad' })}
+          />
           <div className="dock-modes" role="radiogroup" aria-label="押した音の行き先">
             <button type="button" role="radio" aria-checked={!audition} className={!audition ? 'on' : ''} onClick={() => setAudition(false)}>
               楽譜に入力
@@ -720,8 +735,31 @@ export function ScoreScreen() {
             beatSeconds={(60 / song.tempo) * Math.max(0.25, dur / PPQ)}
           />
         )}
-        {panelOpen && edit && (
-          <InstrumentPanel instrument={edit.instrument} sun={edit.sun} tuning={edit.tuning} external={sounding} onNote={onNote} volume={edit.volume} />
+        {panelOpen && edit && settings.inputSurface === 'keypad' && (
+          <ScoreKeypad
+            instrument={edit.instrument}
+            sun={edit.sun}
+            tuning={edit.tuning}
+            onNote={(midi, str) => {
+              const v = playNote(edit.instrument, midi, { gain: edit.volume, a4: settings.a4 });
+              if (edit.instrument !== 'shamisen') window.setTimeout(() => v.stop(), 400);
+              onNote(midi, str);
+            }}
+            onRest={() => writeHere({})}
+            onExtend={() => writeHere({}, true)}
+            onDelete={clearHere}
+          />
+        )}
+        {edit && (
+          <InstrumentPanel
+            instrument={edit.instrument}
+            sun={edit.sun}
+            tuning={edit.tuning}
+            external={sounding}
+            onNote={onNote}
+            volume={edit.volume}
+            hidden={!panelOpen || settings.inputSurface === 'keypad'}
+          />
         )}
       </section>
 
