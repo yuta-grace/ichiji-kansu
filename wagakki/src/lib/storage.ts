@@ -18,8 +18,6 @@ export interface Settings {
   scoreDensity: 'auto' | 'edit' | 'compact';
   /** 読み替えの画面で表示する書き方 */
   readColumns: ('shamisen' | 'shakuhachi' | 'doremi' | 'cde' | 'staff')[];
-  /** 読み替え表の向き：rows＝横向き（音を左から右へ）、columns＝縦向き */
-  readLayout: 'rows' | 'columns';
   /** 'auto'：見つかった琴古フォント、'kana'：カタカナ、それ以外：フォント名 */
   kinkoFont: string;
   theme: 'system' | 'light' | 'dark';
@@ -41,7 +39,6 @@ export const DEFAULT_SETTINGS: Settings = {
   multiPart: false,
   scoreDensity: 'auto',
   readColumns: ['shamisen', 'shakuhachi', 'doremi'],
-  readLayout: 'rows',
   kinkoFont: 'auto',
   theme: 'system',
   instrument: 'shamisen',

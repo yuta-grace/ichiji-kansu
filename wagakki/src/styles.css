@@ -2334,3 +2334,68 @@ input[type='range'] {
   color: var(--text);
   font-weight: 600;
 }
+
+/* 読み替え表：五線譜の行は区切らず、1本の続いた五線にする */
+.read-table.across tr.staff-row td {
+  border-left: 0;
+  padding-left: 0;
+  padding-right: 0;
+  height: auto;
+}
+.read-table.across tr.staff-row td.octave {
+  border-left: 0;
+}
+.staff-note {
+  display: block;
+  min-width: 56px;
+}
+.staff-note line {
+  stroke: var(--ink);
+  stroke-width: 0.8;
+}
+.staff-note ellipse,
+.staff-note text {
+  fill: var(--ink);
+}
+.staff-note ellipse {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(-20deg);
+}
+.staff-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.staff-head-clef {
+  font-family: 'Noto Music', serif;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--ink);
+}
+.mini-staff-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.mini-staff-wrap .mini-clef {
+  font-family: 'Noto Music', serif;
+  font-size: 24px;
+  line-height: 1;
+}
+.mini-staff-wrap .staff-note {
+  width: 40px;
+  min-width: 40px;
+}
+.readout-cell .staff-note line {
+  stroke: var(--text);
+}
+.readout-cell .staff-note ellipse,
+.readout-cell .staff-note text {
+  fill: var(--text);
+}
+
+/* ピアノが主役のとき（鳴らすでピアノを選んだとき）は、鍵盤を大きく */
+.piano-wrap.big .piano {
+  height: clamp(150px, 34vh, 280px);
+}

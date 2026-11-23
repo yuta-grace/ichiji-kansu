@@ -34,8 +34,8 @@ export const INSTRUMENTS: Record<Instrument, InstrumentDef> = {
     usesTuning: false,
     gmProgram: 0,
     clef: 'treble',
-    // 今はト音記号1段・単音。大譜表と和音はあとで
-    range: () => [48, 84],
+    // 普通のピアノと同じ 88鍵（A0〜C8）。楽譜は今はト音記号1段・単音（大譜表と和音はあとで）
+    range: () => [21, 108],
     base: () => 60,
   },
   shakuhachi: {

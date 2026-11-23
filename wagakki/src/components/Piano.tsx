@@ -36,6 +36,15 @@ export function Piano({
   const whites = keys.filter((m) => !isBlackKey(m));
   const scroller = useRef<HTMLDivElement>(null);
 
+  // 最初は真ん中のド（C4）が中央に来るようにする（音域の外なら音域の真ん中）
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const target = 60 >= lo && 60 <= hi ? 60 : Math.round((lo + hi) / 2);
+    const wi = whites.findIndex((w) => w >= target);
+    el.scrollLeft = Math.max(0, wi * WHITE_W - el.clientWidth / 2 + WHITE_W / 2);
+  }, [lo, hi]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 光った鍵が見えるようにスクロールする
   const firstActive = [...active][0];
   useEffect(() => {
